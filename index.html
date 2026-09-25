@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>The Coin Table — Bitcoin, explained without the cult</title>
+    <meta name="description" content="Your wallet isn't a balance. It's a pile of coins. An interactive 3D lab about UTXOs, change and fees." />
+    <meta name="theme-color" content="#06070a" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div id="stage"></div>
+
+    <div id="hud" class="hud">
+      <header class="title">
+        <div class="brand">
+          <div class="wordmark"><span>The Coin</span><em>Table</em></div>
+          <p class="tagline">Your wallet isn’t a balance. It’s a pile of coins.</p>
+        </div>
+        <p class="lede">
+          Wallets don’t store a number. They hold separate coins — <b>unspent outputs</b>. Paying melts some whole
+          and makes new ones.
+        </p>
+        <div class="stats">
+          <div class="stat"><span class="k">Wallet</span><span class="v" id="stat-total">—</span></div>
+          <div class="stat"><span class="k">Coins</span><span class="v" id="stat-count">—</span></div>
+          <div class="stat"><span class="k">Fee rate</span><span class="v" id="stat-rate">—</span></div>
+        </div>
+      </header>
+
+      <nav class="modes" id="modes" role="tablist" aria-label="Mental model">
+        <span class="modes-label">Mental model</span>
+        <div class="seg">
+          <span class="seg-thumb" aria-hidden="true"></span>
+          <button role="tab" data-mode="myth"><kbd>1</kbd><span>What people think</span></button>
+          <button role="tab" data-mode="reality"><kbd>2</kbd><span>What Bitcoin does</span></button>
+        </div>
+      </nav>
+
+      <div class="utils">
+        <button class="util" id="btn-how" title="How it works (H)"><kbd>H</kbd><span>How it works</span></button>
+        <button class="util" id="btn-cam" title="Cinematic cameras (C)"><kbd>C</kbd><span>Camera</span></button>
+        <button class="util icon" id="btn-sound" title="Sound (M)" aria-label="Toggle sound"><span class="snd"></span></button>
+        <button class="util icon" id="btn-hide" title="Hide UI (/)" aria-label="Hide UI"><kbd>/</kbd></button>
+      </div>
+
+      <aside class="ledger" id="ledger">
+        <div class="invoice">
+          <div class="inv-top">
+            <span class="k">Pay</span>
+            <span class="inv-to" id="inv-to"></span>
+            <span class="inv-n" id="inv-n"></span>
+          </div>
+          <div class="inv-amt"><span id="inv-amt"></span><small>sats</small></div>
+          <div class="inv-memo" id="inv-memo"></div>
+          <div class="paid-stamp" aria-hidden="true">Paid</div>
+        </div>
+
+        <section class="ledger-body reality-only">
+          <div class="row row-in">
+            <span class="k"><i class="dot in"></i>Inputs <em id="in-count"></em></span>
+            <span class="v" id="in-sum">0</span>
+          </div>
+          <div class="chips" id="in-chips"></div>
+          <div class="row row-pay">
+            <span class="k"><i class="dot pay"></i>− Payment <em>to them</em></span>
+            <span class="v" id="pay-v">0</span>
+          </div>
+          <div class="row row-fee">
+            <span class="k"><i class="dot fee"></i>− Fee <em id="fee-math"></em></span>
+            <span class="v" id="fee-v">0</span>
+          </div>
+          <div class="rule"></div>
+          <div class="row row-change">
+            <span class="k"><i class="dot change"></i>= Change <em id="change-note">back to you</em></span>
+            <span class="v" id="change-v">0</span>
+          </div>
+          <div class="split" id="split" aria-hidden="true">
+            <span class="seg-pay"></span><span class="seg-fee"></span><span class="seg-change"></span><span class="seg-short"></span>
+          </div>
+          <div class="warn" id="warn" role="status"></div>
+        </section>
+
+        <section class="ledger-body myth-only">
+          <div class="bank">
+            <div class="bank-k">Balance</div>
+            <div class="bank-v"><span id="bank-bal">0</span><small>sats</small></div>
+            <div class="bank-rows">
+              <div class="row"><span class="k">Send to <b id="bank-to"></b></span><span class="v" id="bank-pay"></span></div>
+              <div class="row"><span class="k">Network fee</span><span class="v" id="bank-fee"></span></div>
+              <div class="rule"></div>
+              <div class="row strong"><span class="k">New balance</span><span class="v" id="bank-new"></span></div>
+            </div>
+            <p class="bank-note">The bank-app picture. The total is right — but it hides <i>how</i> the money moves.</p>
+          </div>
+        </section>
+
+        <div class="fee-ctl">
+          <div class="fee-head">
+            <label for="fee">Fee rate</label>
+            <span class="fee-read"><b id="fee-rate">10</b> sat/vB</span>
+          </div>
+          <input type="range" id="fee" min="1" max="150" step="1" value="10" aria-describedby="fee-hint" />
+          <div class="fee-scale" id="fee-hint"><span>cheaper <kbd>[</kbd></span><span><kbd>]</kbd> higher priority</span></div>
+        </div>
+
+        <div class="actions">
+          <button class="btn ghost reality-only" id="btn-pick" title="Let the wallet choose (P)"><kbd>P</kbd>Pick for me</button>
+          <button class="btn ghost reality-only" id="btn-clear" title="Clear selection (X)"><kbd>X</kbd>Clear</button>
+          <button class="btn primary" id="btn-send"><span class="lbl">Send</span><kbd>Space</kbd></button>
+        </div>
+      </aside>
+
+      <section class="receipt" id="receipt" aria-live="polite">
+        <div class="receipt-head">
+          <span class="k" id="rc-kicker">Transaction broadcast</span>
+          <code id="rc-txid"></code>
+          <span class="rc-status" id="rc-status">unconfirmed</span>
+        </div>
+        <div class="receipt-flow" id="rc-flow"></div>
+        <p class="receipt-say" id="rc-say"></p>
+        <div class="receipt-foot">
+          <span class="rc-hint" id="rc-hint"></span>
+          <button class="btn primary" id="btn-next"><span class="lbl">Next bill</span><kbd>Space</kbd></button>
+        </div>
+      </section>
+
+      <aside class="how" id="how" aria-hidden="true">
+        <div class="how-head">
+          <h2>How it works</h2>
+          <button class="x" id="how-close" aria-label="Close">×</button>
+        </div>
+        <ol class="steps">
+          <li><b>Your wallet holds coins, not a number.</b> Each is an <dfn data-term="utxo">unspent output</dfn> left by some earlier transaction.</li>
+          <li><b>To pay, you spend whole coins.</b> They become the transaction’s <dfn data-term="input">inputs</dfn>. A coin can’t be snapped in half.</li>
+          <li><b>The transaction makes new coins.</b> One <dfn data-term="output">output</dfn> pays them; another returns the rest to you as <dfn data-term="change">change</dfn>.</li>
+          <li><b>Whatever isn’t assigned is the <dfn data-term="fee">fee</dfn>.</b> The miner who puts it in a block keeps it.</li>
+        </ol>
+        <div class="gloss" id="gloss">
+          <div class="term" data-term="utxo"><b>UTXO</b><span>Unspent transaction output: an amount locked to a key you control. Your “balance” is just these added up.</span></div>
+          <div class="term" data-term="input"><b>Input</b><span>A UTXO being spent. It’s always consumed whole.</span></div>
+          <div class="term" data-term="output"><b>Output</b><span>A new amount created by a transaction. Unspent, it’s someone’s UTXO.</span></div>
+          <div class="term" data-term="change"><b>Change</b><span>An output that pays you back. Usually sent to a fresh address in your own wallet.</span></div>
+          <div class="term" data-term="fee"><b>Fee</b><span>Inputs minus outputs. There’s no fee line in a transaction — it’s the gap.</span></div>
+          <div class="term" data-term="sats"><b>Sats</b><span>1 bitcoin = 100,000,000 satoshis.</span></div>
+          <div class="term" data-term="vb"><b>sat/vB</b><span>Fees are priced by size. More inputs → bigger transaction → bigger fee.</span></div>
+        </div>
+        <p class="fine">
+          Sizes assume native SegWit (P2WPKH): ≈68 vB per input, 31 vB per output, ≈11 vB overhead. Outputs under
+          294 sats are “dust” that nodes won’t relay by default, so wallets add tiny leftovers to the fee. Coins,
+          txids and the time-lapse block are demo data.
+        </p>
+      </aside>
+
+      <footer class="legend" id="legend">
+        <div class="legend-grid">
+          <span><kbd>Click</kbd> add / remove coin</span>
+          <span><kbd>Space</kbd> send</span>
+          <span><kbd>←</kbd><kbd>→</kbd><kbd>Enter</kbd> coins by key</span>
+          <span><kbd>1</kbd><kbd>2</kbd> mental model</span>
+          <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>Q</kbd><kbd>E</kbd> move</span>
+          <span><kbd>Drag</kbd><kbd>Right-drag</kbd><kbd>Wheel</kbd> orbit · pan · zoom</span>
+          <span><kbd>C</kbd> cinematic</span>
+          <span><kbd>R</kbd> reset view <kbd>⇧R</kbd> wallet</span>
+          <span><kbd>L</kbd> labels</span>
+          <span><kbd>/</kbd> hide UI</span>
+        </div>
+      </footer>
+
+      <div class="subtitle" id="subtitle">
+        <p class="narrator" id="narrator" aria-live="polite"></p>
+        <div class="coach" id="coach"></div>
+      </div>
+      <div class="toasts" id="toasts"></div>
+      <div class="cam-badge" id="cam-badge"></div>
+      <div class="tip" id="tip" role="tooltip"></div>
+    </div>
+
+    <div class="unhide" id="unhide"><kbd>/</kbd> show UI</div>
+    <div class="veil" id="veil"></div>
+
+    <noscript>This lab needs JavaScript and WebGL.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
