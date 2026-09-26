@@ -57,17 +57,52 @@ export function findWalletSpot(r: number, taken: readonly Disc[], seed = 0, fron
   return { x: W.x + (Math.random() - 0.5) * 2, z: W.z - W.r - 0.6 };
 }
 
+const SLOT_GAP = 0.14;
+
+function inputRows() {
+  const S = LAYOUT.inputs;
+  return [
+    { x: S.x, z: S.z, width: S.w - 0.1 },
+    { x: S.x + 0.9, z: S.z - 1.25, width: 5.8 },
+  ];
+}
+
+function rowWidth(radii: readonly number[]): number {
+  return radii.reduce((a, r) => a + r * 2, 0) + SLOT_GAP * Math.max(0, radii.length - 1);
+}
+
 export function inputSlots(radii: readonly number[]): Array<{ x: number; z: number }> {
   const S = LAYOUT.inputs;
-  const gap = 0.14;
-  const total = radii.reduce((a, r) => a + r * 2, 0) + gap * Math.max(0, radii.length - 1);
-  const squeeze = total > S.w - 0.4 ? (S.w - 0.4) / total : 1;
-  let x = S.x - (total * squeeze) / 2;
-  return radii.map((r) => {
-    const cx = x + r * squeeze;
-    x += (r * 2 + gap) * squeeze;
-    return { x: cx, z: S.z };
+  const rows = inputRows();
+  const members: number[][] = [[], []];
+  if (rowWidth(radii) <= S.w - 0.4) {
+    members[0] = radii.map((_, i) => i);
+  } else {
+    const load = [0, 0];
+    const bySize = radii.map((_, i) => i).sort((a, b) => radii[b] - radii[a]);
+    for (const i of bySize) {
+      const w = radii[i] * 2 + SLOT_GAP;
+      const k = (load[0] + w) / rows[0].width <= (load[1] + w) / rows[1].width ? 0 : 1;
+      members[k].push(i);
+      load[k] += w;
+    }
+    for (const m of members) m.sort((a, b) => a - b);
+  }
+
+  const out: Array<{ x: number; z: number }> = new Array(radii.length);
+  members.forEach((idx, k) => {
+    if (!idx.length) return;
+    const row = rows[k];
+    const rs = idx.map((i) => radii[i]);
+    const total = rowWidth(rs);
+    const squeeze = total > row.width ? row.width / total : 1;
+    let x = row.x - (total * squeeze) / 2;
+    idx.forEach((i, j) => {
+      out[i] = { x: x + rs[j] * squeeze, z: row.z };
+      x += (rs[j] * 2 + SLOT_GAP) * squeeze;
+    });
   });
+  return out;
 }
 
 export function traySpot(n: number, heightBelow: number): { x: number; z: number; y: number } {
