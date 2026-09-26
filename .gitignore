@@ -143,3 +143,8 @@ vite.config.ts.timestamp-*
 .vite/
 
 CLAUDE.md
+.claude/
+
+# Test output
+test-results/
+playwright-report/
