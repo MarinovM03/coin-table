@@ -3,15 +3,15 @@ export type Ease = (t: number) => number;
 export const ease = {
   linear: (t: number) => t,
   inCubic: (t: number) => t * t * t,
-  outCubic: (t: number) => 1 - Math.pow(1 - t, 3),
-  inOutCubic: (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
-  outQuart: (t: number) => 1 - Math.pow(1 - t, 4),
+  outCubic: (t: number) => 1 - (1 - t) ** 3,
+  inOutCubic: (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2),
+  outQuart: (t: number) => 1 - (1 - t) ** 4,
   inOutSine: (t: number) => -(Math.cos(Math.PI * t) - 1) / 2,
-  outExpo: (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
+  outExpo: (t: number) => (t === 1 ? 1 : 1 - 2 ** (-10 * t)),
   outBack: (t: number) => {
     const c1 = 1.70158;
     const c3 = c1 + 1;
-    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+    return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
   },
 } satisfies Record<string, Ease>;
 
@@ -43,6 +43,10 @@ class Tweens {
       entry.cancelled = true;
     };
     return p;
+  }
+
+  get busy(): boolean {
+    return this.active.length > 0;
   }
 
   wait(seconds: number): Promise<void> {
