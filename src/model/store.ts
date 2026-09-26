@@ -28,6 +28,7 @@ export interface State {
   lastTx: TxRecord | null;
   /** Myth-mode payments not yet shown underneath; revealed when reality mode is back. */
   pendingReveal: TxRecord[];
+  focusId: string | null;
   uiHidden: boolean;
   labels: boolean;
   muted: boolean;
@@ -52,6 +53,7 @@ function initialState(prev?: Partial<State>): State {
     history: [],
     lastTx: null,
     pendingReveal: [],
+    focusId: null,
     uiHidden: prev?.uiHidden ?? false,
     labels: prev?.labels ?? true,
     muted: prev?.muted ?? false,
@@ -101,4 +103,23 @@ export function currentPlan(s: State): TxPlan {
     invoiceOf(s).amount,
     s.feeRate,
   );
+}
+
+export interface RoundStats {
+  bills: number;
+  coinsIn: number;
+  changeCoins: number;
+  fees: number;
+}
+
+export function finishedRound(s: State): RoundStats | null {
+  if (s.invoiceIndex === 0 || s.invoiceIndex % INVOICES.length !== 0) return null;
+  // Every bill is paid exactly once before moving on, so the round is the last few payments.
+  const round = s.history.slice(-INVOICES.length);
+  return {
+    bills: INVOICES.length,
+    coinsIn: round.reduce((n, tx) => n + tx.inputs.length, 0),
+    changeCoins: round.filter((tx) => tx.change).length,
+    fees: round.reduce((n, tx) => n + tx.plan.fee, 0),
+  };
 }
