@@ -7,6 +7,8 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
+const LITE_RATIO = 0.5;
+
 /** Vignette, film grain and slight chromatic fringing toward the edges. */
 const FinishShader = {
   uniforms: {
@@ -76,20 +78,36 @@ export class Stage {
   /** Lens for the current viewport; the camera rig scales it per shot. */
   baseFov = 32;
   /** Render scale: past 1.5 the HDR + bloom chain costs far more than it shows. */
-  private ratio = Math.min(window.devicePixelRatio, 1.5);
+  private maxRatio = Math.min(window.devicePixelRatio, 1.5);
+  private ratio = this.maxRatio;
   private avgDt = 1 / 60;
   private slowFor = 0;
-  private settle = 90;
+  private fastFor = 0;
+  private clock = 0;
+  private lastStepUp = -Infinity;
+  /** Seconds to wait before judging frame times (shader compiles at start, resizes after a step). */
+  private settle = 1.5;
+  private lost = false;
+  readonly lite: boolean;
+  onContextLost: (() => void) | null = null;
+  onContextRestored: (() => void) | null = null;
 
   constructor(host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+    this.lite = isSoftwareRenderer(this.renderer.getContext());
+    if (this.lite) this.maxRatio = this.ratio = LITE_RATIO;
     this.renderer.setPixelRatio(this.ratio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.98;
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = !this.lite;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.domElement.id = 'gl';
+    this.renderer.domElement.setAttribute('role', 'img');
+    this.renderer.domElement.setAttribute(
+      'aria-label',
+      'A table with your wallet’s coins. Use the arrow keys and Enter to pick coins, and Space to pay; the panel on the right shows the numbers.',
+    );
     host.appendChild(this.renderer.domElement);
 
     this.labels = new CSS2DRenderer();
@@ -103,11 +121,20 @@ export class Stage {
     this.scene.background = bg;
     this.scene.fog = new THREE.FogExp2(bg, 0.022);
 
+    this.buildEnvironment();
     // Dimmed so reflections don't light up the dark vault.
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.42;
-    pmrem.dispose();
+
+    const canvas = this.renderer.domElement;
+    canvas.addEventListener('webglcontextlost', () => {
+      this.lost = true;
+      this.onContextLost?.();
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.lost = false;
+      this.buildEnvironment();
+      this.onContextRestored?.();
+    });
 
     // Soft-edged pool: the table rim falls off into shadow.
     this.key = new THREE.SpotLight('#ffe0b5', 440, 0, 0.55, 0.75, 2);
@@ -149,6 +176,14 @@ export class Stage {
     this.resize();
   }
 
+  private buildEnvironment() {
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const old = this.scene.environment;
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    old?.dispose();
+    pmrem.dispose();
+  }
+
   resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -168,29 +203,70 @@ export class Stage {
     this.finish.uniforms.uAspect.value = w / h;
   }
 
-  /** Drops the render scale a notch when frames stay slower than ~50 fps. */
+  get renderScale(): number {
+    return this.ratio;
+  }
+
   adapt(dt: number) {
-    if (dt > 0.1) return; // tab switch or a one-off hitch
+    if (dt > 1) return;
+    this.clock += dt;
     if (this.settle > 0) {
-      this.settle--;
+      this.settle -= dt;
       return;
     }
-    this.avgDt += (dt - this.avgDt) * 0.05;
+    // Time-based smoothing, so a 2 fps machine reacts as fast as a 60 fps one.
+    this.avgDt += (Math.min(dt, 0.25) - this.avgDt) * (1 - Math.exp(-dt / 0.4));
     this.slowFor = this.avgDt > 1 / 50 ? this.slowFor + dt : Math.max(0, this.slowFor - dt * 0.5);
-    if (this.slowFor > 1.5 && this.ratio > 0.75) {
-      this.ratio = Math.max(0.75, this.ratio - 0.25);
-      this.renderer.setPixelRatio(this.ratio);
-      this.composer.setPixelRatio(this.ratio);
-      this.composer.setSize(window.innerWidth, window.innerHeight);
-      this.slowFor = 0;
-      this.avgDt = 1 / 60;
-      this.settle = 45;
+    this.fastFor = this.avgDt < 1 / 57 ? this.fastFor + dt : 0;
+    if (this.slowFor > 1.5 && this.ratio > (this.lite ? LITE_RATIO : 0.75)) {
+      if (this.clock - this.lastStepUp < 6) this.maxRatio = this.ratio - 0.25;
+      this.setRatio(this.ratio - 0.25);
+    } else if (this.fastFor > 8 && this.ratio < this.maxRatio) {
+      this.lastStepUp = this.clock;
+      this.setRatio(this.ratio + 0.25);
     }
   }
 
+  private setRatio(r: number) {
+    this.ratio = Math.min(this.maxRatio, Math.max(this.lite ? LITE_RATIO : 0.75, r));
+    this.renderer.setPixelRatio(this.ratio);
+    this.composer.setPixelRatio(this.ratio);
+    this.composer.setSize(window.innerWidth, window.innerHeight);
+    this.slowFor = 0;
+    this.fastFor = 0;
+    this.avgDt = 1 / 60;
+    this.settle = 0.75;
+  }
+
+  /**
+   * In lite mode, drop the decorative point lights (miner, orb, balance bar,
+   * kicker). Every light is evaluated for every pixel even at zero intensity,
+   * which a software renderer feels. Call once, after the scene is built.
+   */
+  trimForLite() {
+    if (!this.lite) return;
+    this.scene.traverse((o) => {
+      if (o instanceof THREE.PointLight) o.visible = false;
+    });
+  }
+
   render(time: number) {
-    this.finish.uniforms.uTime.value = time;
-    this.composer.render();
+    if (this.lost) return;
+    if (this.lite) this.renderer.render(this.scene, this.camera);
+    else {
+      this.finish.uniforms.uTime.value = time;
+      this.composer.render();
+    }
     this.labels.render(this.scene, this.camera);
   }
+}
+
+function isSoftwareRenderer(gl: WebGLRenderingContext | WebGL2RenderingContext): boolean {
+  let name = String(gl.getParameter(gl.RENDERER));
+  // Chrome reports a generic name unless asked for the unmasked one; Firefox already gives the real one.
+  if (/webkit webgl/i.test(name)) {
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    if (info) name = String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
+  }
+  return /swiftshader|llvmpipe|softpipe|software|basic render driver/i.test(name);
 }
