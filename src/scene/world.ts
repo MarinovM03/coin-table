@@ -1,110 +1,24 @@
 import * as THREE from 'three';
-import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { damp } from '../util/tween';
-import { html, setHtml } from '../util/html';
+import { Glow, additive, glowRectTexture, glowRingTexture } from './glow';
 import { LAYOUT, TABLE_RADIUS } from './layout';
+import { Miner } from './miner';
 import { glowTexture, radialTexture, tableTextures } from './textures';
 
 const BRASS = new THREE.MeshStandardMaterial({ color: '#b98d4a', metalness: 1, roughness: 0.32 });
-
-function glowRingTexture(ticks = 0): THREE.CanvasTexture {
-  const S = 512;
-  const c = document.createElement('canvas');
-  c.width = c.height = S;
-  const ctx = c.getContext('2d')!;
-  const cx = S / 2;
-  const g = ctx.createRadialGradient(cx, cx, cx * 0.8, cx, cx, cx);
-  g.addColorStop(0, 'rgba(255,255,255,0)');
-  g.addColorStop(0.55, 'rgba(255,255,255,0.9)');
-  g.addColorStop(0.62, 'rgba(255,255,255,0.35)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, S, S);
-  if (ticks) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-    ctx.lineWidth = 3;
-    for (let i = 0; i < ticks; i++) {
-      const a = (i / ticks) * Math.PI * 2;
-      const r0 = cx * 0.66;
-      const r1 = cx * (i % 3 === 0 ? 0.76 : 0.71);
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(a) * r0, cx + Math.sin(a) * r0);
-      ctx.lineTo(cx + Math.cos(a) * r1, cx + Math.sin(a) * r1);
-      ctx.stroke();
-    }
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-function glowRectTexture(w: number, h: number): THREE.CanvasTexture {
-  const S = 1024;
-  const H = Math.round((S * h) / w);
-  const c = document.createElement('canvas');
-  c.width = S;
-  c.height = H;
-  const ctx = c.getContext('2d')!;
-  const pad = 40;
-  ctx.shadowColor = 'rgba(255,255,255,1)';
-  ctx.shadowBlur = 26;
-  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-  ctx.lineWidth = 5;
-  const r = (H - pad * 2) / 2;
-  ctx.beginPath();
-  ctx.roundRect(pad, pad, S - pad * 2, H - pad * 2, r);
-  ctx.stroke();
-  ctx.stroke();
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-function additive(map: THREE.Texture, color: THREE.ColorRepresentation): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({
-    map,
-    color,
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
-}
-
-class Glow {
-  level = 0;
-  target = 0;
-  pulse = 0;
-  constructor(
-    readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>,
-    private max = 1,
-  ) {}
-  update(dt: number, time: number) {
-    this.level += (this.target - this.level) * damp(6, dt);
-    this.pulse = Math.max(0, this.pulse - dt * 1.4);
-    const breathe = 0.85 + Math.sin(time * 2.2) * 0.15;
-    this.mesh.material.opacity = Math.min(1.5, (this.level * breathe + this.pulse) * this.max);
-    this.mesh.visible = this.mesh.material.opacity > 0.002;
-  }
-  flash(v = 1) {
-    this.pulse = Math.max(this.pulse, v);
-  }
-}
 
 export class World {
   readonly group = new THREE.Group();
   readonly walletGlow: Glow;
   readonly inputsGlow: Glow;
-  readonly txGlow: Glow;
-  readonly txRunes: Glow;
   readonly recipientGlow: Glow;
   readonly miner: Miner;
+  private readonly txGlow: Glow;
+  private readonly txRunes: Glow;
+  private txSpin = 0;
   private dust: THREE.Points;
   private dustVel: Float32Array;
   private cone: THREE.Mesh;
   private tableMat: THREE.MeshStandardMaterial;
-  txSpin = 0;
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
@@ -307,6 +221,13 @@ export class World {
     this.tableMat.roughnessMap = rough;
   }
 
+  /** The transaction ring: 0 idle, 0.5 while inputs gather, 1 while it forges the outputs. */
+  setTxActivity(level: number) {
+    this.txGlow.target = level;
+    this.txRunes.target = level;
+    this.txSpin = level >= 1 ? 1 : 0;
+  }
+
   private buildVault() {
     const pillarMat = new THREE.MeshStandardMaterial({ color: '#101218', roughness: 0.6, metalness: 0.3 });
     const trimMat = new THREE.MeshStandardMaterial({ color: '#2a2217', roughness: 0.4, metalness: 0.8, emissive: '#3a2a12', emissiveIntensity: 0.25 });
@@ -367,108 +288,5 @@ export class World {
     p.needsUpdate = true;
 
     this.miner.update(dt, time);
-  }
-}
-
-/** Fees fly here; a pulse means the transaction was included in a block. */
-export class Miner {
-  readonly group = new THREE.Group();
-  readonly anchor = new THREE.Vector3(LAYOUT.miner.x, LAYOUT.miner.y, LAYOUT.miner.z);
-  readonly label: CSS2DObject;
-  readonly labelEl: HTMLDivElement;
-  private head: THREE.Group;
-  private coreMat: THREE.MeshStandardMaterial;
-  private edgeMat: THREE.LineBasicMaterial;
-  private light: THREE.PointLight;
-  private energy = 0;
-  private pulseT = 0;
-  private fees = 0;
-
-  constructor() {
-    const M = LAYOUT.miner;
-    this.group.position.set(M.x, M.y, M.z);
-
-    const box = new THREE.BoxGeometry(1, 1, 1);
-    const edges = new THREE.EdgesGeometry(box);
-    this.edgeMat = new THREE.LineBasicMaterial({ color: '#ffcf7a', transparent: true, opacity: 0.85, toneMapped: false });
-    this.coreMat = new THREE.MeshStandardMaterial({
-      color: '#1a1408',
-      emissive: '#ff9f3a',
-      emissiveIntensity: 0.25,
-      roughness: 0.4,
-      metalness: 0.2,
-      transparent: true,
-      opacity: 0.85,
-    });
-
-    this.head = new THREE.Group();
-    const core = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.72, 0.72), this.coreMat);
-    this.head.add(core, new THREE.LineSegments(edges, this.edgeMat));
-    this.head.scale.setScalar(1.05);
-    this.group.add(this.head);
-
-    const chainMat = new THREE.LineBasicMaterial({ color: '#a8804a', transparent: true, opacity: 0.35 });
-    const linkMat = new THREE.LineBasicMaterial({ color: '#a8804a', transparent: true, opacity: 0.25 });
-    const prev = new THREE.Vector3();
-    for (let i = 1; i <= 5; i++) {
-      const b = new THREE.LineSegments(edges, chainMat.clone());
-      (b.material as THREE.LineBasicMaterial).opacity = 0.34 - i * 0.05;
-      b.position.set(-i * 1.9, i * 0.05, -i * 1.1);
-      b.scale.setScalar(0.9);
-      b.rotation.y = i * 0.15;
-      this.group.add(b);
-      const link = new THREE.BufferGeometry().setFromPoints([prev.clone(), b.position.clone()]);
-      this.group.add(new THREE.Line(link, linkMat));
-      prev.copy(b.position);
-    }
-
-    this.light = new THREE.PointLight('#ffa64d', 0, 9, 2);
-    this.group.add(this.light);
-
-    this.labelEl = document.createElement('div');
-    this.labelEl.className = 'world-tag world-tag--miner';
-    setHtml(this.labelEl, html`<b>Miner</b><span>collects the fee for putting your transaction in a block</span><em class="fees"></em>`);
-    this.label = new CSS2DObject(this.labelEl);
-    this.label.position.set(0, -1.05, 0);
-    this.group.add(this.label);
-  }
-
-  absorb(amount: number) {
-    this.fees += amount;
-    this.energy = Math.min(1.6, this.energy + 0.35);
-    const el = this.labelEl.querySelector('.fees');
-    if (el) el.textContent = `+${amount.toLocaleString('en-US')} sats in fees`;
-    this.labelEl.classList.add('is-hot');
-  }
-
-  /** Draw the eye without adding fees (used by the glossary). */
-  nudge(text: string) {
-    this.energy = Math.min(1.6, this.energy + 0.5);
-    const el = this.labelEl.querySelector('.fees');
-    if (el) el.textContent = text;
-    this.labelEl.classList.add('is-hot');
-  }
-
-  pulse() {
-    this.pulseT = 1;
-    this.labelEl.classList.remove('is-hot');
-  }
-
-  get totalFees() {
-    return this.fees;
-  }
-
-  update(dt: number, time: number) {
-    this.energy = Math.max(0, this.energy - dt * 0.25);
-    this.pulseT = Math.max(0, this.pulseT - dt * 1.2);
-    const e = 0.25 + this.energy * 1.4 + this.pulseT * 5;
-    this.coreMat.emissiveIntensity = e;
-    this.edgeMat.opacity = 0.6 + this.energy * 0.3 + this.pulseT * 0.4;
-    this.light.intensity = this.energy * 10 + this.pulseT * 40;
-    this.head.rotation.y += dt * (0.25 + this.energy * 1.5);
-    this.head.rotation.x = Math.sin(time * 0.4) * 0.18;
-    this.head.position.y = Math.sin(time * 0.9) * 0.08;
-    const s = 1.05 + this.pulseT * 0.35;
-    this.head.scale.setScalar(s);
   }
 }

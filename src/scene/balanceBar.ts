@@ -84,6 +84,12 @@ export class BalanceBar {
     this.group.visible = false;
   }
 
+  /** A freshly filled wallet: the whole bar is its starting total. */
+  reset(total: number) {
+    this.setMax(total);
+    this.setBalance(total, true);
+  }
+
   setMax(v: number) {
     this.max = Math.max(1, v);
   }

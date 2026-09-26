@@ -3,7 +3,7 @@ import '@fontsource-variable/jetbrains-mono';
 import '@fontsource/instrument-serif/400.css';
 import '@fontsource/instrument-serif/400-italic.css';
 import './style.css';
-import { App } from './app';
+import { App } from './app/app';
 
 function webgl2Ok(): boolean {
   try {
