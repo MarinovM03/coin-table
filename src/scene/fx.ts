@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { html, setHtml, type SafeHtml } from '../util/html';
 import { clamp, damp } from '../util/tween';
 import { glowTexture } from './textures';
 
@@ -24,6 +25,7 @@ interface Trail {
   target: THREE.Object3D;
   mat: THREE.SpriteMaterial;
   t: number;
+  delay: number;
   dur: number;
   acc: number;
 }
@@ -40,6 +42,12 @@ interface Courier {
   curve: THREE.QuadraticBezierCurve3;
   t: number;
   dur: number;
+}
+
+interface Float {
+  obj: CSS2DObject;
+  t: number;
+  life: number;
 }
 
 interface Shock {
@@ -64,18 +72,19 @@ export class Fx {
   private trails: Trail[] = [];
   private motes: Mote[] = [];
   private couriers: Courier[] = [];
+  private floats: Float[] = [];
   private tmp = new THREE.Vector3();
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
     this.orb = new THREE.Mesh(
       new THREE.SphereGeometry(0.28, 48, 32),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffc46b').multiplyScalar(3), toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffae4a').multiplyScalar(1.7), toneMapped: false }),
     );
     this.orbHalo = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: this.glow, color: '#ff9d3c', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
+      new THREE.SpriteMaterial({ map: this.glow, color: '#ff8a2a', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
     );
-    this.orbHalo.scale.setScalar(2.4);
+    this.orbHalo.scale.setScalar(2.0);
     this.orbLight = new THREE.PointLight('#ffae55', 0, 7, 2);
     this.orb.add(this.orbHalo, this.orbLight);
     this.orb.visible = false;
@@ -136,10 +145,10 @@ export class Fx {
   }
 
   /** A label that follows a moving object and fades out after `life` seconds. */
-  followTag(target: THREE.Object3D, html: string, cls: string, life: number, lift = 0.62) {
+  followTag(target: THREE.Object3D, content: SafeHtml, cls: string, life: number, lift = 0.62) {
     const el = document.createElement('div');
     el.className = `flow-tag ${cls}`;
-    el.innerHTML = `<div class="flow-inner">${html}</div>`;
+    setHtml(el, html`<div class="flow-inner">${content}</div>`);
     const obj = new CSS2DObject(el);
     obj.center.set(0.5, 1);
     target.getWorldPosition(obj.position);
@@ -148,17 +157,17 @@ export class Fx {
     this.tags.push({ obj, target, lift, t: 0, life, out: false });
   }
 
-  trail(target: THREE.Object3D, color: THREE.ColorRepresentation, dur: number) {
+  trail(target: THREE.Object3D, color: THREE.ColorRepresentation, dur: number, delay = 0) {
     const mat = new THREE.SpriteMaterial({
       map: this.glow,
       color,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.45,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       toneMapped: false,
     });
-    this.trails.push({ target, mat, t: 0, dur, acc: 0 });
+    this.trails.push({ target, mat, t: 0, delay, dur, acc: 0 });
   }
 
   /** An invisible object flying a lofted arc, for a label to follow. */
@@ -172,23 +181,30 @@ export class Fx {
     return obj;
   }
 
-  floatText(p: THREE.Vector3, html: string, cls = '', life = 2.2): CSS2DObject {
+  floatText(p: THREE.Vector3, content: SafeHtml, cls = '', life = 2.2): CSS2DObject {
     const el = document.createElement('div');
     el.className = `float-tag ${cls}`;
     // The renderer owns the outer element's transform, so animate an inner wrapper.
-    el.innerHTML = `<div class="float-inner">${html}</div>`;
+    setHtml(el, html`<div class="float-inner">${content}</div>`);
     el.style.setProperty('--life', `${life}s`);
     const o = new CSS2DObject(el);
     o.position.copy(p);
     this.group.add(o);
-    window.setTimeout(() => {
-      o.removeFromParent();
-      el.remove();
-    }, life * 1000 + 50);
+    this.floats.push({ obj: o, t: 0, life });
     return o;
   }
 
   update(dt: number, time: number) {
+    for (let i = this.floats.length - 1; i >= 0; i--) {
+      const f = this.floats[i];
+      f.t += dt;
+      if (f.t >= f.life + 0.05) {
+        f.obj.removeFromParent();
+        f.obj.element.remove();
+        this.floats.splice(i, 1);
+      }
+    }
+
     for (let i = this.tags.length - 1; i >= 0; i--) {
       const g = this.tags[i];
       g.t += dt;
@@ -221,15 +237,15 @@ export class Fx {
     for (let i = this.trails.length - 1; i >= 0; i--) {
       const tr = this.trails[i];
       tr.t += dt;
-      tr.acc += dt;
-      if (tr.target.parent && tr.t < tr.dur) {
+      if (tr.t > tr.delay) tr.acc += dt;
+      if (tr.target.parent && tr.t > tr.delay && tr.t < tr.dur) {
         while (tr.acc > 0.018) {
           tr.acc -= 0.018;
           const sp = new THREE.Sprite(tr.mat);
           tr.target.getWorldPosition(sp.position);
           sp.position.y += 0.05;
           this.group.add(sp);
-          this.motes.push({ sprite: sp, t: 0, life: 0.5, size: 0.5 });
+          this.motes.push({ sprite: sp, t: 0, life: 0.45, size: 0.34 });
         }
       }
       if (tr.t > tr.dur + 0.6) {
@@ -253,8 +269,8 @@ export class Fx {
     this.orb.visible = lv > 0.01;
     const wob = 1 + Math.sin(time * 18) * 0.04 * lv;
     this.orb.scale.setScalar(Math.max(0.001, lv * wob));
-    this.orbHalo.material.opacity = clamp(lv, 0, 1) * 0.9;
-    this.orbLight.intensity = lv * 14;
+    this.orbHalo.material.opacity = clamp(lv, 0, 1) * 0.7;
+    this.orbLight.intensity = lv * 9;
 
     for (let i = this.sparks.length - 1; i >= 0; i--) {
       const s = this.sparks[i];
@@ -280,7 +296,7 @@ export class Fx {
       const s = this.shocks[i];
       s.t += dt;
       const k = clamp(s.t / s.dur);
-      const e = 1 - Math.pow(1 - k, 3);
+      const e = 1 - (1 - k) ** 3;
       s.mesh.scale.setScalar(0.2 + e * s.size);
       s.mesh.material.opacity = (1 - k) * 0.9;
       if (k >= 1) {

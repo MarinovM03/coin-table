@@ -6,6 +6,13 @@
     <title>The Coin Table — Bitcoin, explained without the cult</title>
     <meta name="description" content="Your wallet isn't a balance. It's a pile of coins. An interactive 3D lab about UTXOs, change and fees." />
     <meta name="theme-color" content="#06070a" />
+    <meta name="referrer" content="no-referrer" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="The Coin Table" />
+    <meta property="og:title" content="The Coin Table — your wallet isn’t a balance" />
+    <meta property="og:description" content="A playable 3D table that shows how Bitcoin really spends: whole coins in, new coins out, and the fee is the gap." />
+    <meta property="og:image:alt" content="A dark table with a pile of gold coins, and two whole coins set aside as the inputs for a payment." />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
@@ -28,20 +35,20 @@
         </div>
       </header>
 
-      <nav class="modes" id="modes" role="tablist" aria-label="Mental model">
-        <span class="modes-label">Mental model</span>
+      <nav class="modes" id="modes" aria-label="Mental model">
+        <span class="modes-label" aria-hidden="true">Mental model</span>
         <div class="seg">
           <span class="seg-thumb" aria-hidden="true"></span>
-          <button role="tab" data-mode="myth"><kbd>1</kbd><span>What people think</span></button>
-          <button role="tab" data-mode="reality"><kbd>2</kbd><span>What Bitcoin does</span></button>
+          <button type="button" data-mode="myth" aria-pressed="false"><kbd>1</kbd><span>What people think</span></button>
+          <button type="button" data-mode="reality" aria-pressed="true"><kbd>2</kbd><span>What Bitcoin does</span></button>
         </div>
       </nav>
 
       <div class="utils">
-        <button class="util" id="btn-how" title="How it works (H)"><kbd>H</kbd><span>How it works</span></button>
-        <button class="util" id="btn-cam" title="Cinematic cameras (C)"><kbd>C</kbd><span>Camera</span></button>
-        <button class="util icon" id="btn-sound" title="Sound (M)" aria-label="Toggle sound"><span class="snd"></span></button>
-        <button class="util icon" id="btn-hide" title="Hide UI (/)" aria-label="Hide UI"><kbd>/</kbd></button>
+        <button type="button" class="util" id="btn-how" title="How it works (H)"><kbd>H</kbd><span>How it works</span></button>
+        <button type="button" class="util" id="btn-cam" title="Cinematic cameras (C)"><kbd>C</kbd><span>Camera</span></button>
+        <button type="button" class="util icon" id="btn-sound" title="Sound (M)" aria-label="Toggle sound"><span class="snd"></span></button>
+        <button type="button" class="util icon" id="btn-hide" title="Hide UI (/)" aria-label="Hide UI"><kbd>/</kbd></button>
       </div>
 
       <aside class="ledger" id="ledger">
@@ -78,7 +85,7 @@
           <div class="split" id="split" aria-hidden="true">
             <span class="seg-pay"></span><span class="seg-fee"></span><span class="seg-change"></span><span class="seg-short"></span>
           </div>
-          <div class="warn" id="warn" role="status"></div>
+          <div class="warn" id="warn"></div>
         </section>
 
         <section class="ledger-body myth-only">
@@ -105,13 +112,13 @@
         </div>
 
         <div class="actions">
-          <button class="btn ghost reality-only" id="btn-pick" title="Let the wallet choose (P)"><kbd>P</kbd>Pick for me</button>
-          <button class="btn ghost reality-only" id="btn-clear" title="Clear selection (X)"><kbd>X</kbd>Clear</button>
-          <button class="btn primary" id="btn-send"><span class="lbl">Send</span><kbd>Space</kbd></button>
+          <button type="button" class="btn ghost reality-only" id="btn-pick" title="Let the wallet choose (P)"><kbd>P</kbd>Pick for me</button>
+          <button type="button" class="btn ghost reality-only" id="btn-clear" title="Clear selection (X)"><kbd>X</kbd>Clear</button>
+          <button type="button" class="btn primary" id="btn-send"><span class="lbl">Send</span><kbd>Space</kbd></button>
         </div>
       </aside>
 
-      <section class="receipt" id="receipt" aria-live="polite">
+      <section class="receipt" id="receipt" aria-label="Receipt" inert>
         <div class="receipt-head">
           <span class="k" id="rc-kicker">Transaction broadcast</span>
           <code id="rc-txid"></code>
@@ -121,14 +128,14 @@
         <p class="receipt-say" id="rc-say"></p>
         <div class="receipt-foot">
           <span class="rc-hint" id="rc-hint"></span>
-          <button class="btn primary" id="btn-next"><span class="lbl">Next bill</span><kbd>Space</kbd></button>
+          <span class="rc-next"><kbd>Space</kbd> next bill</span>
         </div>
       </section>
 
-      <aside class="how" id="how" aria-hidden="true">
+      <aside class="how" id="how" aria-label="How it works" inert>
         <div class="how-head">
           <h2>How it works</h2>
-          <button class="x" id="how-close" aria-label="Close">×</button>
+          <button type="button" class="x" id="how-close" aria-label="Close">×</button>
         </div>
         <ol class="steps">
           <li><b>Your wallet holds coins, not a number.</b> Each is an <dfn data-term="utxo">unspent output</dfn> left by some earlier transaction.</li>
@@ -147,8 +154,9 @@
         </div>
         <p class="fine">
           Sizes assume native SegWit (P2WPKH): ≈68 vB per input, 31 vB per output, ≈11 vB overhead. Outputs under
-          294 sats are “dust” that nodes won’t relay by default, so wallets add tiny leftovers to the fee. Coins,
-          txids and the time-lapse block are demo data.
+          294 sats are “dust” that nodes won’t relay by default, so when a change coin would end up that small
+          (after paying for its own output), wallets skip it and the leftover goes to the fee. Coins, txids and the
+          time-lapse block are demo data.
         </p>
       </aside>
 
@@ -168,18 +176,24 @@
       </footer>
 
       <div class="subtitle" id="subtitle">
-        <p class="narrator" id="narrator" aria-live="polite"></p>
+        <p class="narrator" id="narrator"></p>
         <div class="coach" id="coach"></div>
       </div>
       <div class="toasts" id="toasts"></div>
       <div class="cam-badge" id="cam-badge"></div>
       <div class="tip" id="tip" role="tooltip"></div>
+      <p class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></p>
     </div>
 
     <div class="unhide" id="unhide"><kbd>/</kbd> show UI</div>
+    <div class="gpu-lost" id="gpu-lost" role="alert" hidden>
+      <p class="gpu-wait">Your graphics driver reset the 3D view. Restoring…</p>
+      <p class="gpu-stuck">The 3D view didn’t come back.</p>
+      <button class="btn primary" id="gpu-reload" type="button">Reload</button>
+    </div>
     <div class="veil" id="veil"></div>
 
-    <noscript>This lab needs JavaScript and WebGL.</noscript>
+    <noscript><p class="noscript">This lab needs JavaScript and WebGL 2.</p></noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

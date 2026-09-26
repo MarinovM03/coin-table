@@ -3,7 +3,7 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { sfx } from './audio/sfx';
 import { fakeTxid, inputCost, pickCoins, planTx, type TxPlan } from './model/bitcoin';
 import { FEE_MAX, FEE_MIN, currentPlan, invoiceOf, selectedCoins, store, type Mode, type State, type TxRecord } from './model/store';
-import { nextId, walletTotal, type Invoice, type Utxo } from './model/wallet';
+import { INVOICES, nextId, walletTotal, type Invoice, type Utxo } from './model/wallet';
 import { BalanceBar } from './scene/balanceBar';
 import { CameraRig } from './scene/cameraRig';
 import { CoinView } from './scene/coin';
@@ -12,26 +12,33 @@ import { LAYOUT, coinSize, findWalletSpot, inputSlots, traySpot, type Disc } fro
 import { Stage } from './scene/stage';
 import { World } from './scene/world';
 import { COARSE, Hud } from './ui/hud';
+import { commandFor } from './ui/keys';
 import { plural, sats } from './util/format';
+import { html, setHtml, type SafeHtml } from './util/html';
 import { clamp, damp, ease, tweens } from './util/tween';
 
 const WARM = new THREE.Color('#ffe0b5');
 const COOL = new THREE.Color('#cfe6ff');
 const MUTE_KEY = 'coin-table:muted';
+const FRESH_MS = 25_000;
+const OUTPUT_HEAT = 0.55;
+/** Trails start once a coin has cleared the orb's glow, so they don't streak through it. */
+const TRAIL_DELAY = 0.2;
+const IDLE_AFTER = 20;
 
 const sizeNorm = (c: CoinView) => clamp((c.r - 0.36) / 0.34);
 
-function splitEquation(plan: TxPlan): string {
-  const term = (cls: string, v: number, label: string) => `<span class="t ${cls}"><b>${sats(v)}</b><i>${label}</i></span>`;
+function splitEquation(plan: TxPlan): SafeHtml {
+  const term = (cls: string, v: number, label: string) => html`<span class="t ${cls}"><b>${sats(v)}</b><i>${label}</i></span>`;
   const parts = [
     term('in', plan.inputsTotal, 'in'),
-    '<span class="op">=</span>',
+    html`<span class="op">=</span>`,
     term('pay', plan.payment, 'payment'),
-    '<span class="op">+</span>',
-    term('fee', plan.fee, plan.dustToFee > 0 ? `fee · incl. ${sats(plan.dustToFee)} dust` : 'fee'),
+    html`<span class="op">+</span>`,
+    term('fee', plan.fee, plan.dustToFee > 0 ? `fee · incl. ${sats(plan.dustToFee)} leftover` : 'fee'),
   ];
-  if (plan.hasChange) parts.push('<span class="op">+</span>', term('change', plan.change, 'change'));
-  return `<div class="eq">${parts.join('')}</div>`;
+  if (plan.hasChange) parts.push(html`<span class="op">+</span>`, term('change', plan.change, 'change'));
+  return html`<div class="eq">${parts}</div>`;
 }
 
 export class App {
@@ -57,9 +64,9 @@ export class App {
   private down: { x: number; y: number; t: number } | null = null;
   private hovered: CoinView | null = null;
   private focusId: string | null = null;
-  /** Until the first coin is picked, the pile shimmers and a callout points at it. */
   private hasPicked = false;
   private lastInput = 0;
+  private badgeExpiry = 0;
   private inviteOrder: CoinView[] = [];
   private callout: CSS2DObject;
   private calloutOn = false;
@@ -96,6 +103,17 @@ export class App {
 
     this.rig.onShot = (shot, i, n) => this.hud.camBadge(shot ? `${i + 1}/${n} · ${shot.name}` : null);
 
+    let gpuTimer = 0;
+    this.stage.onContextLost = () => {
+      this.hud.gpuLost(true);
+      // Browsers don't always hand the context back; offer a reload if it stays gone.
+      gpuTimer = window.setTimeout(() => this.hud.gpuStuck(), 4000);
+    };
+    this.stage.onContextRestored = () => {
+      window.clearTimeout(gpuTimer);
+      this.hud.gpuLost(false);
+    };
+
     let muted = false;
     try {
       muted = localStorage.getItem(MUTE_KEY) === '1';
@@ -107,7 +125,7 @@ export class App {
 
     const el = document.createElement('div');
     el.className = 'callout';
-    el.innerHTML = `<span class="callout-arrow" aria-hidden="true"></span><span class="callout-body"><b>${COARSE ? 'Tap' : 'Click'} coins</b><small>No single coin covers this bill.<br />Combine whole ones.</small></span>`;
+    setHtml(el, html`<span class="callout-arrow" aria-hidden="true"></span><span class="callout-body"><b>${COARSE ? 'Tap' : 'Click'} coins</b><small>No single coin covers this bill.<br />Combine whole ones.</small></span>`);
     this.callout = new CSS2DObject(el);
     this.callout.center.set(0, 0.5);
     this.callout.position.set(LAYOUT.wallet.x + LAYOUT.wallet.r + 0.25, 0.35, LAYOUT.wallet.z + 0.25);
@@ -124,14 +142,32 @@ export class App {
     this.bar.setBalance(this.startMax, true);
     this.sync(s, true);
     this.hud.render(s);
+    this.stage.trimForLite();
     this.warmup();
     this.rig.intro();
     document.getElementById('veil')?.classList.add('is-off');
+    let tick = 0;
     const loop = () => {
       requestAnimationFrame(loop);
-      this.frame();
+      const idle = this.isIdle();
+      if (idle && ++tick % 3 !== 0) return;
+      this.frame(undefined, true, idle);
     };
     loop();
+  }
+
+  private isIdle(): boolean {
+    if (this.time - this.lastInput < IDLE_AFTER || tweens.busy || this.rig.busy) return false;
+    if (store.get().phase === 'sending' || this.inFlight.size) return false;
+    for (const c of this.coins.values()) if (c.moving) return false;
+    return true;
+  }
+
+  refreshTextures() {
+    for (const c of this.coins.values()) c.redrawFace();
+    for (const c of this.tray) c.redrawFace();
+    for (const c of this.inFlight) c.redrawFace();
+    this.world.refreshTable();
   }
 
   /**
@@ -203,6 +239,7 @@ export class App {
     const slots = inputSlots(selViews.map((v) => v.r));
     const now = performance.now();
     const cost = inputCost(s.feeRate);
+    let expiry = 0;
 
     for (const v of this.coins.values()) {
       const i = sel.indexOf(v.utxo.id);
@@ -218,13 +255,11 @@ export class App {
       v.warn = v.utxo.value <= cost;
       v.unconfirmed = !v.utxo.confirmed;
       v.focusTarget = this.focusId === v.utxo.id ? 1 : 0;
-      v.setChip({
-        selected: i >= 0,
-        warn: v.warn,
-        fresh: v.utxo.origin === 'change' && now - v.utxo.bornAt < 25_000,
-        unconfirmed: !v.utxo.confirmed,
-      });
+      const fresh = v.utxo.origin === 'change' && now - v.utxo.bornAt < FRESH_MS;
+      if (fresh) expiry = expiry ? Math.min(expiry, v.utxo.bornAt + FRESH_MS) : v.utxo.bornAt + FRESH_MS;
+      v.setChip({ selected: i >= 0, warn: v.warn, fresh, unconfirmed: !v.utxo.confirmed });
     }
+    this.badgeExpiry = expiry;
     for (const t of this.tray) t.unconfirmed = !t.utxo.confirmed;
     this.inviteOrder = [...this.coins.values()].sort((a, b) => a.home.x - b.home.x || a.home.z - b.home.z);
 
@@ -254,43 +289,51 @@ export class App {
       });
     });
 
-    if (!myth && s.pendingReveal) {
-      const tx = s.pendingReveal;
+    if (!myth && s.pendingReveal.length) {
       const ep = this.epoch;
-      void tweens.wait(0.75).then(() => ep === this.epoch && this.reveal(tx));
+      // If the player flips back to myth before this fires, keep the reveal for later.
+      void tweens.wait(0.75).then(() => {
+        const now = store.get();
+        if (ep === this.epoch && now.mode === 'reality' && now.pendingReveal.length) this.reveal(now.pendingReveal);
+      });
     }
   }
 
-  /** After a myth-mode payment: show what actually happened to the pile. */
-  private reveal(tx: TxRecord) {
+  private reveal(txs: TxRecord[]) {
     for (const g of this.ghosts) {
       const p = new THREE.Vector3(g.x, 0.02, g.z);
       this.fx.shock(p, '#ff7a5c', g.r * 2.4, 1.1);
-      this.fx.floatText(p.clone().setY(0.5), `<s>${sats(g.value)}</s><small>spent</small>`, 'ft-spent', 3.2);
+      this.fx.floatText(p.clone().setY(0.5), html`<s>${sats(g.value)}</s><small>spent</small>`, 'ft-spent', 3.2);
     }
     this.ghosts = [];
-    if (tx.change) {
-      const v = this.coins.get(tx.change.id);
-      if (v) {
-        this.fx.shock(v.root.position, '#ffcf7a', v.r * 3, 1);
-        this.fx.floatText(v.root.position.clone().setY(0.7), `+${sats(tx.change.value)}<small>new change coin</small>`, 'ft-change', 3.4);
-        v.hoverTarget = 1;
-        void tweens.wait(1.6).then(() => {
-          if (this.hovered !== v) v.hoverTarget = 0;
-        });
-      }
+    // A change coin from an earlier payment may already have been spent by a later one.
+    const changes = txs.map((tx) => tx.change).filter((u): u is Utxo => !!u && this.coins.has(u.id));
+    for (const u of changes) {
+      const v = this.coins.get(u.id)!;
+      this.fx.shock(v.root.position, '#ffcf7a', v.r * 3, 1);
+      this.fx.floatText(v.root.position.clone().setY(0.7), html`+${sats(u.value)}<small>new change coin</small>`, 'ft-change', 3.4);
+      v.hoverTarget = 1;
+      void tweens.wait(1.6).then(() => {
+        if (this.hovered !== v) v.hoverTarget = 0;
+      });
     }
     this.world.walletGlow.flash(1);
-    const k = tx.inputs.length;
-    this.hud.toast(
-      `<b>Underneath:</b> ${k} ${plural(k, 'coin')} (${sats(tx.plan.inputsTotal)}) ${k === 1 ? 'was' : 'were'} spent whole${
+
+    const spent = txs.reduce((n, tx) => n + tx.inputs.length, 0);
+    let msg: string;
+    if (txs.length === 1) {
+      const tx = txs[0];
+      msg = `${spent} ${plural(spent, 'coin')} (${sats(tx.plan.inputsTotal)}) ${spent === 1 ? 'was' : 'were'} spent whole${
         tx.change ? `, and a new ${sats(tx.change.value)} coin came back as change` : ''
-      }. Same total. Different pile.`,
-      'good',
-      6500,
-    );
+      }`;
+    } else {
+      msg = `${txs.length} payments spent ${spent} whole ${plural(spent, 'coin')}${
+        changes.length ? `, and ${changes.length} new change ${plural(changes.length, 'coin')} ${changes.length === 1 ? 'is' : 'are'} in your wallet` : ''
+      }`;
+    }
+    this.hud.toast(html`<b>Underneath:</b> ${msg}. Same total. Different pile.`, 'good', 6500);
     sfx.chime();
-    store.set({ pendingReveal: null });
+    store.set({ pendingReveal: [] });
   }
 
   private toggle(id: string) {
@@ -325,7 +368,7 @@ export class App {
     const picked = pickCoins(s.utxos, inv.amount, s.feeRate);
     if (!picked) {
       sfx.deny();
-      this.hud.toast(`Your whole wallet can’t cover ${sats(inv.amount)} plus the fee. <kbd>⇧R</kbd> resets it.`, 'warn');
+      this.hud.toast(html`Your whole wallet can’t cover ${sats(inv.amount)} plus the fee. <kbd>⇧R</kbd> resets it.`, 'warn');
       return;
     }
     this.hasPicked = true;
@@ -334,14 +377,16 @@ export class App {
     sfx.tick(1.3);
     this.hud.toast(
       plan.hasChange
-        ? `Picked ${picked.length} ${plural(picked.length, 'coin')} with the least waste: fee now plus the cost of a change coin later.`
-        : `Picked ${picked.length} ${plural(picked.length, 'coin')} that avoid change entirely — wallets love a near-exact match.`,
+        ? html`Picked ${picked.length} ${plural(picked.length, 'coin')} with the least waste: fee now plus the cost of a change coin later.`
+        : html`Picked ${picked.length} ${plural(picked.length, 'coin')} that avoid change entirely — wallets love a near-exact match.`,
       '',
       3800,
     );
   }
 
   private setFee(rate: number) {
+    // The fee is fixed once a transaction is signed and on its way.
+    if (store.get().phase === 'sending') return;
     const r = Math.round(clamp(rate, FEE_MIN, FEE_MAX));
     if (r === store.get().feeRate) return;
     store.set({ feeRate: r });
@@ -362,6 +407,20 @@ export class App {
       invoiceIndex: s.phase === 'receipt' ? s.invoiceIndex + 1 : s.invoiceIndex,
       selected: m === 'myth' ? [] : s.selected,
     });
+    if (s.phase === 'receipt') {
+      const summary = this.roundSummary(store.get());
+      if (summary) this.hud.toast(summary, 'good', 8000);
+    }
+  }
+
+  private roundSummary(s: State): SafeHtml | null {
+    if (s.invoiceIndex === 0 || s.invoiceIndex % INVOICES.length !== 0) return null;
+    // Every bill is paid exactly once before moving on, so the round is the last few payments.
+    const round = s.history.slice(-INVOICES.length);
+    const spent = round.reduce((n, tx) => n + tx.inputs.length, 0);
+    const change = round.filter((tx) => tx.change).length;
+    const fees = round.reduce((n, tx) => n + tx.plan.fee, 0);
+    return html`<b>All ${INVOICES.length} bills paid.</b> ${spent} whole coins went in, ${change} change ${plural(change, 'coin')} came back, and ${sats(fees)} sats went to fees. The bills start over — <kbd>⇧R</kbd> refills the wallet.`;
   }
 
   private toggleMute() {
@@ -382,10 +441,13 @@ export class App {
     store.set({ phase: 'select', selected: [], invoiceIndex: s.invoiceIndex + 1 });
     const ns = store.get();
     const inv = invoiceOf(ns);
-    if (!pickCoins(ns.utxos, inv.amount, ns.feeRate)) {
-      this.hud.toast(`Not enough left for ${inv.to}. Hold <kbd>Shift</kbd> + <kbd>R</kbd> to refill the wallet.`, 'warn', 6000);
+    const summary = this.roundSummary(ns);
+    if (summary) {
+      this.hud.toast(summary, 'good', 8000);
+    } else if (!pickCoins(ns.utxos, inv.amount, ns.feeRate)) {
+      this.hud.toast(html`Not enough left for ${inv.to}. Hold <kbd>Shift</kbd> + <kbd>R</kbd> to refill the wallet.`, 'warn', 6000);
     } else {
-      this.hud.toast(`New bill: <b>${inv.to}</b> — ${sats(inv.amount)} sats.`, '', 2600);
+      this.hud.toast(html`New bill: <b>${inv.to}</b> — ${sats(inv.amount)} sats.`, '', 2600);
     }
     sfx.tick(1);
   }
@@ -422,7 +484,7 @@ export class App {
     this.bar.setMax(this.startMax);
     this.bar.setBalance(this.startMax, true);
     const n = store.get().utxos.length;
-    this.hud.toast(`Wallet refilled with the original ${n} coins.`, '', 2400);
+    this.hud.toast(html`Wallet refilled with the original ${n} coins.`, '', 2400);
   }
 
   private buildTx(inputs: Utxo[], plan: TxPlan, inv: Invoice, mode: Mode): TxRecord {
@@ -456,7 +518,7 @@ export class App {
     if (!plan.ok) {
       sfx.deny();
       this.hud.flashWarn();
-      if (plan.inputCount === 0) this.hud.toast('Pick at least one coin first — click one on the table.', 'warn', 2600);
+      if (plan.inputCount === 0) this.hud.toast(html`Pick at least one coin first — click one on the table.`, 'warn', 2600);
       return;
     }
     const ep = this.epoch;
@@ -502,7 +564,7 @@ export class App {
         : sats(plan.inputsTotal);
     this.fx.floatText(
       orbPos.clone().setY(1.3),
-      `${sum}<small>${views.length} whole ${plural(views.length, 'coin')} in · none can be split</small>`,
+      html`${sum}<small>${views.length} whole ${plural(views.length, 'coin')} in · none can be split</small>`,
       'ft-in',
       1.25,
     );
@@ -536,7 +598,7 @@ export class App {
     this.fx.floatText(orbPos.clone().setY(2.0), splitEquation(plan), 'ft-eq', 3.6);
     const payView = new CoinView(tx.payment, true);
     payView.melt = 1;
-    payView.glow = 1;
+    payView.glow = OUTPUT_HEAT;
     payView.setPosition(orbPos.clone().setY(0.3));
     payView.onLand = (c, arc) => this.landed(c, arc);
     this.stage.scene.add(payView.root);
@@ -548,7 +610,7 @@ export class App {
       const spot = findWalletSpot(changeView.r, this.takenDiscs(), 1.3 + this.coins.size, true);
       changeView.home.set(spot.x, 0, spot.z);
       changeView.melt = 1;
-      changeView.glow = 1;
+      changeView.glow = OUTPUT_HEAT;
       changeView.setPosition(orbPos.clone().setY(0.3));
       changeView.onLand = (c, arc) => this.landed(c, arc);
       this.stage.scene.add(changeView.root);
@@ -583,17 +645,17 @@ export class App {
       },
     });
     const courier = this.fx.courier(orbPos, this.world.miner.anchor, 2.6, 1.1);
-    this.fx.followTag(courier, `<em>Fee</em><b>${sats(plan.fee)}</b><span>→ miner</span>`, 'fee', 3.3, 0.3);
+    this.fx.followTag(courier, html`<em>Fee</em><b>${sats(plan.fee)}</b><span>→ miner</span>`, 'fee', 3.3, 0.3);
 
     const tp = traySpot(this.tray.length, this.trayHeight());
     const trayPos = new THREE.Vector3(tp.x, tp.y, tp.z);
     payView.home.copy(trayPos);
     payView.floorY = 0.016;
-    this.fx.followTag(payView.root, `<em>Payment</em><b>${sats(tx.payment.value)}</b><span>→ ${inv.to}</span>`, 'pay', 3.9);
-    this.fx.trail(payView.root, '#8fcaff', 1.2);
+    this.fx.followTag(payView.root, html`<em>Payment</em><b>${sats(tx.payment.value)}</b><span>→ ${inv.to}</span>`, 'pay', 3.9);
+    this.fx.trail(payView.root, '#8fcaff', 1.2, TRAIL_DELAY);
     if (changeView && tx.change) {
-      this.fx.followTag(changeView.root, `<em>Change</em><b>${sats(tx.change.value)}</b><span>→ back to you</span>`, 'change', 4.1);
-      this.fx.trail(changeView.root, '#ffcf7a', 1.2);
+      this.fx.followTag(changeView.root, html`<em>Change</em><b>${sats(tx.change.value)}</b><span>→ back to you</span>`, 'change', 4.1);
+      this.fx.trail(changeView.root, '#ffcf7a', 1.2, TRAIL_DELAY);
     }
     sfx.whoosh(1, 0.12);
     const flights: Promise<void>[] = [payView.moveTo(trayPos, { dur: 1.15, arc: 1.9, flips: 1 })];
@@ -602,8 +664,8 @@ export class App {
       duration: 1.1,
       ease: ease.outCubic,
       update: (t) => {
-        payView.glow = 1 - t;
-        if (changeView) changeView.glow = 1 - t;
+        payView.glow = OUTPUT_HEAT * (1 - t);
+        if (changeView) changeView.glow = OUTPUT_HEAT * (1 - t);
         this.fx.setOrb(1 - t);
       },
     });
@@ -651,7 +713,7 @@ export class App {
     if (!picked) {
       sfx.deny();
       this.hud.flashWarn();
-      this.hud.toast(`Balance too low for ${sats(inv.amount)} plus fee. <kbd>⇧R</kbd> refills the wallet.`, 'warn');
+      this.hud.toast(html`Balance too low for ${sats(inv.amount)} plus fee. <kbd>⇧R</kbd> refills the wallet.`, 'warn');
       return;
     }
     const ep = this.epoch;
@@ -666,17 +728,17 @@ export class App {
     const tp = traySpot(this.tray.length, this.trayHeight());
     const trayPos = new THREE.Vector3(tp.x, tp.y + 0.3, tp.z);
     sfx.whoosh(1.1, 0.1);
-    this.fx.floatText(new THREE.Vector3(LAYOUT.bar.x + 2.2, 2.2, LAYOUT.bar.z), `−${sats(inv.amount + plan.fee)}`, 'ft-myth', 2.4);
+    this.fx.floatText(new THREE.Vector3(LAYOUT.bar.x + 2.2, 2.2, LAYOUT.bar.z), html`−${sats(inv.amount + plan.fee)}`, 'ft-myth', 2.4);
     await this.bar.spend(inv.amount + plan.fee, trayPos);
     if (ep !== this.epoch) return;
     sfx.clink(0.4, 0.6);
     this.world.recipientGlow.flash(0.8);
 
     // The real transaction still happens underneath, with its outputs hidden.
-    this.ghosts = picked.map((u) => {
-      const v = this.coins.get(u.id)!;
-      return { x: v.home.x, z: v.home.z, r: v.r, value: u.value };
-    });
+    for (const u of picked) {
+      const v = this.coins.get(u.id);
+      if (v) this.ghosts.push({ x: v.home.x, z: v.home.z, r: v.r, value: u.value });
+    }
     for (const u of picked) {
       this.coins.get(u.id)?.dispose();
       this.coins.delete(u.id);
@@ -708,7 +770,7 @@ export class App {
       paid: [...cur.paid, tx.payment],
       history: [...cur.history, tx],
       lastTx: tx,
-      pendingReveal: tx,
+      pendingReveal: [...cur.pendingReveal, tx],
       phase: 'receipt',
     });
     this.hud.showReceipt(tx, utxos.length, cur.history.length === 0);
@@ -728,7 +790,7 @@ export class App {
       for (const t of this.tray) if (ids.has(t.utxo.id)) t.utxo = { ...t.utxo, confirmed: true };
       store.set({ utxos: cur.utxos.map(mark), paid: cur.paid.map(mark) });
       if (store.get().lastTx?.txid === tx.txid) this.hud.confirmReceipt();
-      this.hud.toast('⛏ Mined into a block. <span class="muted">Time-lapse — real blocks average about 10 minutes.</span>', 'good', 4200);
+      this.hud.toast(html`⛏ Mined into a block. <span class="muted">Time-lapse — real blocks average about 10 minutes.</span>`, 'good', 4200);
     });
   }
 
@@ -739,6 +801,13 @@ export class App {
       this.lastInput = this.time;
     };
     window.addEventListener('pointerdown', unlock, { capture: true });
+    window.addEventListener(
+      'pointermove',
+      () => {
+        this.lastInput = this.time;
+      },
+      { passive: true },
+    );
     window.addEventListener('keydown', unlock, { capture: true });
 
     dom.addEventListener('pointermove', (e) => {
@@ -748,6 +817,10 @@ export class App {
     });
     dom.addEventListener('pointerleave', () => {
       this.pointerIn = false;
+      this.clearHover();
+    });
+    dom.addEventListener('pointercancel', () => {
+      this.down = null;
       this.clearHover();
     });
     dom.addEventListener('pointerdown', (e) => {
@@ -781,11 +854,16 @@ export class App {
   }
 
   private onKey(e: KeyboardEvent) {
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // AltGr arrives as Ctrl+Alt on Windows and is how many layouts type [ ] and /.
+    const altGr = e.getModifierState('AltGraph');
+    if (e.metaKey || ((e.ctrlKey || e.altKey) && !altGr)) return;
     const t = e.target as HTMLElement | null;
     if (t instanceof HTMLButtonElement && (e.code === 'Space' || e.code === 'Enter')) return;
+    if (t instanceof HTMLTextAreaElement || t?.isContentEditable || (t instanceof HTMLInputElement && t.type !== 'range')) return;
     const s = store.get();
 
+    // Movement keys go by position (WASD is ZQSD on AZERTY); everything else by
+    // the character printed on the key, so shortcuts work on any layout.
     switch (e.code) {
       case 'KeyW':
       case 'KeyA':
@@ -802,70 +880,67 @@ export class App {
         this.rig.keyDown(e.code);
         return;
     }
-    if (e.repeat && !['BracketLeft', 'BracketRight', 'ArrowLeft', 'ArrowRight'].includes(e.code)) return;
+    const cmd = commandFor(e);
+    if (!cmd) return;
+    if (e.repeat && !['fee-down', 'fee-up', 'next-coin', 'prev-coin'].includes(cmd)) return;
 
-    switch (e.code) {
-      case 'Digit1':
-      case 'Numpad1':
+    switch (cmd) {
+      case 'myth':
         this.setMode('myth');
         break;
-      case 'Digit2':
-      case 'Numpad2':
+      case 'reality':
         this.setMode('reality');
         break;
-      case 'Space':
+      case 'send':
         e.preventDefault();
         this.send();
         break;
-      case 'Enter':
-      case 'NumpadEnter':
+      case 'enter':
         e.preventDefault();
         if (this.focusId && s.mode === 'reality') this.toggle(this.focusId);
         else this.send();
         break;
-      case 'ArrowRight':
-      case 'ArrowLeft':
+      case 'next-coin':
+      case 'prev-coin':
         e.preventDefault();
-        this.cycleFocus(e.code === 'ArrowRight' ? 1 : -1);
+        this.cycleFocus(cmd === 'next-coin' ? 1 : -1);
         break;
-      case 'KeyP':
+      case 'pick':
         this.pickForMe();
         break;
-      case 'KeyX':
+      case 'clear':
         this.clearSelection();
         break;
-      case 'BracketLeft':
+      case 'fee-down':
         this.setFee(s.feeRate - (e.shiftKey ? 10 : 1));
         break;
-      case 'BracketRight':
+      case 'fee-up':
         this.setFee(s.feeRate + (e.shiftKey ? 10 : 1));
         break;
-      case 'KeyC':
+      case 'camera':
         this.rig.nextShot();
         break;
-      case 'KeyR':
+      case 'reset':
         if (e.shiftKey) this.resetWallet();
         else {
           this.rig.home();
-          this.hud.toast('View reset. <kbd>⇧R</kbd> resets the wallet too.', '', 1800);
+          this.hud.toast(html`View reset. <kbd>⇧R</kbd> resets the wallet too.`, '', 1800);
         }
         break;
-      case 'Slash':
-      case 'NumpadDivide':
-      case 'IntlRo':
+      case 'hide':
         e.preventDefault();
         store.set({ uiHidden: !s.uiHidden });
         break;
-      case 'KeyH':
+      case 'how':
         store.set({ howOpen: !s.howOpen });
         break;
-      case 'KeyM':
+      case 'mute':
         this.toggleMute();
         break;
-      case 'KeyL':
+      case 'labels':
         store.set({ labels: !s.labels });
         break;
-      case 'Escape':
+      case 'escape':
         if (s.howOpen) store.set({ howOpen: false });
         else if (this.focusId) {
           this.focusId = null;
@@ -991,7 +1066,7 @@ export class App {
     const ready = s.mode === 'reality' && s.phase === 'select' && s.selected.length === 0 && t > 1.3;
     const on = ready && (!this.hasPicked || idle);
     this.inviteOrder.forEach((c, i) => {
-      const wave = on ? Math.pow(Math.max(0, Math.sin(t * 2.3 - i * 0.55)), 10) : 0;
+      const wave = on ? Math.max(0, Math.sin(t * 2.3 - i * 0.55)) ** 10 : 0;
       c.invite += (wave - c.invite) * damp(14, dt);
     });
     const show = ready && !this.hasPicked && !s.uiHidden && !s.howOpen;
@@ -1012,12 +1087,13 @@ export class App {
     this.last = performance.now();
   }
 
-  private frame(fixedDt?: number, draw = true) {
+  private frame(fixedDt?: number, draw = true, throttled = false) {
     const now = performance.now();
     const real = (now - this.last) / 1000;
-    const dt = fixedDt ?? Math.min(0.05, real);
+    const dt = fixedDt ?? Math.min(0.1, real);
     this.last = now;
-    if (fixedDt === undefined) this.stage.adapt(real);
+    // Throttled frames are slow on purpose; they say nothing about the GPU.
+    if (fixedDt === undefined && !throttled) this.stage.adapt(real);
     this.time += dt;
     const t = this.time;
 
@@ -1026,6 +1102,7 @@ export class App {
     this.updateHover();
 
     this.updateInvite(dt, t);
+    if (this.badgeExpiry && now > this.badgeExpiry && store.get().phase !== 'sending') this.layout(store.get());
     for (const c of this.coins.values()) c.update(dt, t);
     for (const c of this.tray) c.update(dt, t);
     for (const c of this.inFlight) c.update(dt, t);

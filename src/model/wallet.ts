@@ -10,7 +10,7 @@ export interface Utxo {
   /** One-line backstory of the transaction that created it. */
   from: string;
   origin: CoinOrigin;
-  /** Wall-clock ms when it was created (for "new" badges). */
+  /** When it was created, in performance.now() ms (for "new" badges). */
   bornAt: number;
   confirmed: boolean;
 }

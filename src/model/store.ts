@@ -26,8 +26,8 @@ export interface State {
   paid: Utxo[];
   history: TxRecord[];
   lastTx: TxRecord | null;
-  /** Set after a myth-mode send so reality mode can reveal what really changed. */
-  pendingReveal: TxRecord | null;
+  /** Myth-mode payments not yet shown underneath; revealed when reality mode is back. */
+  pendingReveal: TxRecord[];
   uiHidden: boolean;
   labels: boolean;
   muted: boolean;
@@ -51,7 +51,7 @@ function initialState(prev?: Partial<State>): State {
     paid: [],
     history: [],
     lastTx: null,
-    pendingReveal: null,
+    pendingReveal: [],
     uiHidden: prev?.uiHidden ?? false,
     labels: prev?.labels ?? true,
     muted: prev?.muted ?? false,

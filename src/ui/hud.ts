@@ -1,7 +1,8 @@
-import { DUST_SATS, INPUT_VB, inputCost, type TxPlan } from '../model/bitcoin';
+import { DUST_SATS, INPUT_VB, OUTPUT_VB, droppedChangeValue, inputCost, pickCoins, planTx, type TxPlan } from '../model/bitcoin';
 import { FEE_MAX, FEE_MIN, currentPlan, invoiceOf, selectedCoins, type Mode, type State, type TxRecord } from '../model/store';
 import { INVOICES, shortTxid, walletTotal, type Utxo } from '../model/wallet';
 import { btc, compact, plural, sats } from '../util/format';
+import { html, setHtml, type SafeHtml } from '../util/html';
 
 export interface HudActions {
   setMode(m: Mode): void;
@@ -62,9 +63,13 @@ export class Hud {
   private receiptEl = $('receipt');
   private narratorEl = $('narrator');
   private feeInput = $<HTMLInputElement>('fee');
+  private announcerEl = $('announcer');
   private camTimer = 0;
   private lastCoach = '';
   private lastNarration = '';
+  private lastChips = '';
+  private announceTimer = 0;
+  private howWasOpen = false;
 
   constructor(actions: HudActions) {
     this.tickers = {
@@ -81,7 +86,6 @@ export class Hud {
       b.addEventListener('click', () => actions.setMode(b.dataset.mode as Mode));
     }
     $('btn-send').addEventListener('click', () => actions.send());
-    $('btn-next').addEventListener('click', () => actions.next());
     $('btn-pick').addEventListener('click', () => actions.pick());
     $('btn-clear').addEventListener('click', () => actions.clear());
     $('btn-how').addEventListener('click', () => actions.toggleHow());
@@ -90,12 +94,16 @@ export class Hud {
     $('btn-hide').addEventListener('click', () => actions.toggleHide());
     $('unhide').addEventListener('click', () => actions.toggleHide());
     $('btn-cam').addEventListener('click', () => actions.nextCamera());
+    $('gpu-reload').addEventListener('click', () => window.location.reload());
 
     this.feeInput.min = String(FEE_MIN);
     this.feeInput.max = String(FEE_MAX);
     this.feeInput.addEventListener('input', () => actions.setFee(Number(this.feeInput.value)));
-    // Arrow keys on a focused slider shouldn't also drive the coin focus.
-    this.feeInput.addEventListener('keydown', (e) => e.stopPropagation());
+    // A focused slider owns its navigation keys; everything else stays a shortcut.
+    const sliderKeys = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+    this.feeInput.addEventListener('keydown', (e) => {
+      if (sliderKeys.has(e.key)) e.stopPropagation();
+    });
 
     $('in-chips').addEventListener('click', (e) => {
       const chip = (e.target as HTMLElement).closest<HTMLElement>('[data-id]');
@@ -125,14 +133,21 @@ export class Hud {
     body.classList.toggle('ui-hidden', s.uiHidden);
     body.classList.toggle('labels-off', !s.labels);
     body.classList.toggle('how-open', s.howOpen);
-    $('how').setAttribute('aria-hidden', String(!s.howOpen));
+    const how = $('how');
+    how.inert = !s.howOpen;
+    this.root.inert = s.uiHidden;
+    if (s.howOpen !== this.howWasOpen) {
+      this.howWasOpen = s.howOpen;
+      if (s.howOpen) $('how-close').focus({ preventScroll: true });
+      else if (how.contains(document.activeElement)) $('btn-how').focus({ preventScroll: true });
+    }
     $('btn-how').classList.toggle('is-on', s.howOpen);
     $('btn-sound').classList.toggle('is-muted', s.muted);
 
     for (const b of document.querySelectorAll<HTMLButtonElement>('#modes button')) {
       const on = b.dataset.mode === s.mode;
       b.classList.toggle('is-on', on);
-      b.setAttribute('aria-selected', String(on));
+      b.setAttribute('aria-pressed', String(on));
     }
 
     // While the receipt is up, the ledger freezes on the transaction that just happened.
@@ -152,23 +167,27 @@ export class Hud {
     $('inv-n').textContent = `bill ${(s.invoiceIndex % INVOICES.length) + 1}/${INVOICES.length}`;
 
     this.feeInput.value = String(s.feeRate);
+    this.feeInput.disabled = s.phase === 'sending';
     $('fee-rate').textContent = String(s.feeRate);
     const pct = ((s.feeRate - FEE_MIN) / (FEE_MAX - FEE_MIN)) * 100;
     this.feeInput.style.setProperty('--p', `${pct}%`);
 
+    // The bank view previews exactly what the payment will do: the wallet's own coin pick.
+    const mythPlan = done ? done.plan : this.mythPlan(s);
+
     this.renderReality(s, plan, done ? done.inputs : selectedCoins(s));
-    this.renderMyth(s, plan, !!done);
+    this.renderMyth(s, mythPlan, !!done);
 
     const send = $<HTMLButtonElement>('btn-send');
-    const canSend = s.phase === 'select' && (s.mode === 'myth' ? this.mythPlanOk(s) : plan.ok);
+    const ready = s.mode === 'myth' ? !!mythPlan : plan.ok;
     send.disabled = s.phase === 'sending';
-    send.classList.toggle('is-ready', canSend || !!done);
+    send.classList.toggle('is-ready', (s.phase === 'select' && ready) || !!done);
     send.classList.toggle('is-next', !!done);
     send.querySelector('.lbl')!.textContent = done
       ? 'Next bill'
-      : s.mode === 'myth' || plan.ok
+      : ready
         ? `Send ${compact(inv.amount)}`
-        : plan.inputCount
+        : s.mode === 'myth' || plan.inputCount
           ? 'Not enough'
           : 'Pick coins';
 
@@ -176,8 +195,16 @@ export class Hud {
     this.renderCoach(s, plan);
   }
 
-  private mythPlanOk(s: State): boolean {
-    return walletTotal(s.utxos) > invoiceOf(s).amount;
+  private mythPlan(s: State): TxPlan | null {
+    const inv = invoiceOf(s);
+    const picked = pickCoins(s.utxos, inv.amount, s.feeRate);
+    return picked
+      ? planTx(
+          picked.map((u) => u.value),
+          inv.amount,
+          s.feeRate,
+        )
+      : null;
   }
 
   private renderReality(s: State, plan: TxPlan, coins: Utxo[]) {
@@ -195,20 +222,21 @@ export class Hud {
 
     const chips = $('in-chips');
     const spent = s.phase === 'receipt';
-    const html = coins
-      .map((c) =>
-        spent
-          ? `<span class="chip is-spent">${sats(c.value)}</span>`
-          : `<button class="chip" data-id="${c.id}" title="Remove from inputs">${sats(c.value)}<i>×</i></button>`,
-      )
-      .join('');
-    if (chips.innerHTML !== html) chips.innerHTML = html;
+    const chipsHtml = html`${coins.map((c) =>
+      spent
+        ? html`<span class="chip is-spent">${sats(c.value)}</span>`
+        : html`<button type="button" class="chip" data-id="${c.id}" title="Remove from inputs">${sats(c.value)}<i>×</i></button>`,
+    )}`;
+    if (chipsHtml.value !== this.lastChips) {
+      this.lastChips = chipsHtml.value;
+      setHtml(chips, chipsHtml);
+    }
     chips.classList.toggle('empty', coins.length === 0);
 
     const note = $('change-note');
     const rowChange = this.root.querySelector('.row-change')!;
     rowChange.classList.toggle('is-none', plan.ok && !plan.hasChange);
-    note.textContent = plan.ok && !plan.hasChange ? (plan.dustToFee > 0 ? 'none · dust → fee' : 'none · exact') : 'back to you';
+    note.textContent = plan.ok && !plan.hasChange ? (plan.dustToFee > 0 ? 'none · leftover → fee' : 'none · exact') : 'back to you';
 
     const split = $('split');
     const denom = Math.max(plan.inputsTotal, plan.payment + plan.fee, 1);
@@ -225,98 +253,110 @@ export class Hud {
     split.classList.toggle('is-empty', plan.inputCount === 0);
 
     const warn = $('warn');
-    let msg = '';
+    let msg = html``;
     let kind = '';
     if (spent) {
-      msg = '';
+      msg = html``;
     } else if (plan.inputCount > 0 && !plan.ok) {
-      msg = `Short by <b>${sats(plan.shortBy)}</b> sats — add another coin.`;
+      msg = html`Short by <b>${sats(plan.shortBy)}</b> sats — add another coin.`;
       kind = 'is-bad';
     } else if (plan.ok && plan.dustToFee > 0) {
-      msg = `The ${sats(plan.dustToFee)} left over is under the ${DUST_SATS}-sat dust limit, so there’s no change coin — it tips the miner instead.`;
+      const outputFee = OUTPUT_VB * plan.feeRate;
+      const wouldBe = droppedChangeValue(plan);
+      msg =
+        wouldBe <= 0
+          ? html`The ${sats(plan.dustToFee)} left over can’t even pay the ${sats(outputFee)}-sat fee for its own change output, so there’s no change coin — it goes to the miner.`
+          : html`A change coin would be worth just ${sats(wouldBe)} after paying ${sats(outputFee)} for its own output — under the ${DUST_SATS}-sat dust limit. So there’s no change coin, and the ${sats(plan.dustToFee)} goes to the miner.`;
       kind = 'is-info';
     } else if (plan.ok) {
       const worst = coins.find((c) => c.value <= inputCost(s.feeRate));
       if (worst) {
-        msg = `That ${sats(worst.value)}-sat coin costs ${sats(inputCost(s.feeRate))} in fees to spend at ${s.feeRate} sat/vB. It’s losing you money.`;
+        msg = html`That ${sats(worst.value)}-sat coin costs ${sats(inputCost(s.feeRate))} in fees to spend at ${s.feeRate} sat/vB. It’s losing you money.`;
         kind = 'is-warn';
       } else if (coins.length >= 3) {
-        msg = `Every input adds ≈${INPUT_VB} vB. Fewer, bigger coins = smaller fee.`;
+        msg = html`Every input adds ≈${INPUT_VB} vB. Fewer, bigger coins = smaller fee.`;
         kind = 'is-info';
       }
     }
-    warn.innerHTML = msg;
+    setHtml(warn, msg);
     warn.className = `warn ${kind}`;
   }
 
-  private renderMyth(s: State, plan: TxPlan, paid: boolean) {
+  private renderMyth(s: State, plan: TxPlan | null, paid: boolean) {
     const total = walletTotal(s.utxos);
     const inv = paid && s.lastTx ? s.lastTx.invoice : invoiceOf(s);
-    // In the bank picture the fee is just "some fee": use a typical 1-in, 2-out size.
-    const fee = plan.ok ? plan.fee : 141 * s.feeRate;
+    const fee = plan?.fee ?? 0;
     // After paying, show the before → after of the payment that just happened.
     const before = paid ? total + inv.amount + fee : total;
     this.tickers.bankBal.set(before);
     $('bank-to').textContent = inv.to;
     $('bank-pay').textContent = `−${sats(inv.amount)}`;
-    $('bank-fee').textContent = `−${sats(fee)}`;
-    this.tickers.bankNew.set(Math.max(0, before - inv.amount - fee));
+    $('bank-fee').textContent = plan ? `−${sats(fee)}` : 'not enough funds';
+    this.tickers.bankNew.set(plan ? before - inv.amount - fee : before);
   }
 
   private renderNarration(s: State, plan: TxPlan) {
     const inv = invoiceOf(s);
     const n = s.utxos.length;
-    let t = '';
+    let t: SafeHtml;
     if (s.mode === 'myth') {
       t =
         s.phase === 'receipt'
-          ? `The number went down. That’s all this view can show. Press <kbd>2</kbd> — the coins underneath changed shape.`
-          : `The bank-app picture: one number, and paying just subtracts. Press <kbd>Space</kbd> to pay ${inv.to}, then <kbd>2</kbd> to look underneath.`;
+          ? html`The number went down. That’s all this view can show. Press <kbd>2</kbd> — the coins underneath changed shape.`
+          : html`The bank-app picture: one number, and paying just subtracts. Press <kbd>Space</kbd> to pay ${inv.to}, then <kbd>2</kbd> to look underneath.`;
     } else if (s.phase === 'sending') {
-      t = `Inputs are consumed whole. New outputs are being created…`;
+      t = html`Inputs are consumed whole. New outputs are being created…`;
     } else if (s.phase === 'receipt' && s.lastTx) {
       const tx = s.lastTx;
-      t = `Done: ${tx.inputs.length} ${plural(tx.inputs.length, 'coin')} in, ${tx.change ? 2 : 1} out. Your wallet now holds ${n} ${plural(n, 'coin')}.`;
+      t = html`Done: ${tx.inputs.length} ${plural(tx.inputs.length, 'coin')} in, ${tx.change ? 2 : 1} out. Your wallet now holds ${n} ${plural(n, 'coin')}.`;
     } else if (plan.inputCount === 0) {
       const biggest = Math.max(0, ...s.utxos.map((u) => u.value));
       t =
         biggest < inv.amount
-          ? `${inv.to} wants <b>${sats(inv.amount)}</b> sats. Your biggest coin is ${sats(biggest)} — and coins don’t split. Combine a few whole ones.`
-          : `${inv.to} wants <b>${sats(inv.amount)}</b> sats. There’s no “${compact(inv.amount)}” in your wallet — just ${n} separate coins. Pick some.`;
+          ? html`${inv.to} wants <b>${sats(inv.amount)}</b> sats. Your biggest coin is ${sats(biggest)} — and coins don’t split. Combine a few whole ones.`
+          : html`${inv.to} wants <b>${sats(inv.amount)}</b> sats. There’s no “${compact(inv.amount)}” in your wallet — just ${n} separate coins. Pick some.`;
     } else if (!plan.ok) {
       t =
         plan.inputCount === 1
-          ? `One ${sats(plan.inputsTotal)} coin isn’t enough, and you can’t break off part of another. <b class="bad">${sats(plan.shortBy)} short</b> — add a whole coin.`
-          : `${plan.inputCount} coins = ${sats(plan.inputsTotal)}. Still <b class="bad">${sats(plan.shortBy)} short</b> once the fee is counted — add another whole coin.`;
+          ? html`One ${sats(plan.inputsTotal)} coin isn’t enough, and you can’t break off part of another. <b class="bad">${sats(plan.shortBy)} short</b> — add a whole coin.`
+          : html`${plan.inputCount} coins = ${sats(plan.inputsTotal)}. Still <b class="bad">${sats(plan.shortBy)} short</b> once the fee is counted — add another whole coin.`;
     } else if (plan.hasChange) {
       const k = plan.inputCount;
-      t = `${k === 1 ? 'One coin' : `${k} whole coins`} (${sats(plan.inputsTotal)}) cover it. Nothing splits, so the transaction makes new coins: ${sats(plan.payment)} for ${inv.to}, <b class="fee">${sats(plan.fee)}</b> to the miner, <b class="change">${sats(plan.change)}</b> back to you.`;
+      t = html`${k === 1 ? 'One coin' : `${k} whole coins`} (${sats(plan.inputsTotal)}) cover it. Nothing splits, so the transaction makes new coins: ${sats(plan.payment)} for ${inv.to}, <b class="fee">${sats(plan.fee)}</b> to the miner, <b class="change">${sats(plan.change)}</b> back to you.`;
     } else if (plan.dustToFee > 0) {
-      t = `Nearly exact. The ${sats(plan.dustToFee)} leftover is too small to be its own coin, so the miner gets it.`;
+      t = html`Nearly exact. The ${sats(plan.dustToFee)} leftover can’t pay for a change coin worth keeping, so the miner gets it.`;
     } else {
-      t = `Exact match — no change coin needed. Rare in the wild; wallets search for these.`;
+      t = html`Exact match — no change coin needed. Rare in the wild; wallets search for these.`;
     }
-    if (t !== this.lastNarration) {
-      this.lastNarration = t;
-      this.narratorEl.innerHTML = t;
+    if (t.value !== this.lastNarration) {
+      this.lastNarration = t.value;
+      setHtml(this.narratorEl, t);
       this.narratorEl.classList.remove('bump');
       void this.narratorEl.offsetWidth;
       this.narratorEl.classList.add('bump');
+      // Screen readers get the settled sentence, not every step of a slider drag.
+      window.clearTimeout(this.announceTimer);
+      this.announceTimer = window.setTimeout(() => {
+        this.announcerEl.textContent = this.narratorEl.textContent ?? '';
+      }, 700);
     }
   }
 
   private renderCoach(s: State, plan: TxPlan) {
-    let t = '';
+    let t: SafeHtml | null;
     const inv = invoiceOf(s);
-    if (s.phase === 'sending') t = '';
-    else if (s.mode === 'myth') t = s.phase === 'receipt' ? 'Press <kbd>2</kbd> to see what actually happened' : `Press <kbd>Space</kbd> to pay ${sats(inv.amount)}`;
-    else if (s.phase === 'receipt') t = s.history.length === 1 ? 'Now press <kbd>1</kbd> to see how most people picture it' : 'Press <kbd>Space</kbd> for the next bill';
-    else if (plan.inputCount === 0) t = `${COARSE ? 'Tap' : 'Click'} coins to cover <b>${sats(inv.amount)}</b> + fee`;
-    else if (!plan.ok) t = `Add a coin — <b>${sats(plan.shortBy)}</b> short`;
-    else t = 'Press <kbd>Space</kbd> to send';
-    if (t !== this.lastCoach) {
-      this.lastCoach = t;
-      this.coachEl.innerHTML = t ? `<span>${t}</span>` : '';
+    if (s.phase === 'sending') t = null;
+    else if (s.mode === 'myth')
+      t = s.phase === 'receipt' ? html`Press <kbd>2</kbd> to see what actually happened` : html`Press <kbd>Space</kbd> to pay ${sats(inv.amount)}`;
+    else if (s.phase === 'receipt')
+      t = s.history.length === 1 ? html`Now press <kbd>1</kbd> to see how most people picture it` : html`Press <kbd>Space</kbd> for the next bill`;
+    else if (plan.inputCount === 0) t = html`${COARSE ? 'Tap' : 'Click'} coins to cover <b>${sats(inv.amount)}</b> + fee`;
+    else if (!plan.ok) t = html`Add a coin — <b>${sats(plan.shortBy)}</b> short`;
+    else t = html`Press <kbd>Space</kbd> to send`;
+    const key = t?.value ?? '';
+    if (key !== this.lastCoach) {
+      this.lastCoach = key;
+      setHtml(this.coachEl, t ? html`<span>${t}</span>` : html``);
       this.coachEl.classList.toggle('is-on', !!t);
     }
   }
@@ -326,7 +366,7 @@ export class Hud {
     const key = `${u.id}|${u.confirmed}|${s.feeRate}|${selected}|${mine}`;
     if (key !== this.tipKey) {
       this.tipKey = key;
-      this.tip.innerHTML = mine ? this.tipMine(u, s, selected) : this.tipTheirs(u);
+      setHtml(this.tip, mine ? this.tipMine(u, s, selected) : this.tipTheirs(u));
       this.tipW = this.tip.offsetWidth;
       this.tipH = this.tip.offsetHeight;
     }
@@ -338,22 +378,22 @@ export class Hud {
     this.tip.classList.add('is-on');
   }
 
-  private tipTheirs(u: Utxo): string {
-    return `
-      <div class="tip-v">${sats(u.value)} <small>sats</small> <span class="pill pay">theirs</span>${u.confirmed ? '' : '<span class="pill pending">unconfirmed</span>'}</div>
+  private tipTheirs(u: Utxo): SafeHtml {
+    return html`
+      <div class="tip-v">${sats(u.value)} <small>sats</small> <span class="pill pay">theirs</span>${u.confirmed ? '' : html`<span class="pill pending">unconfirmed</span>`}</div>
       <div class="tip-from">${u.from}</div>
       <div class="tip-op"><span>outpoint</span> ${shortTxid(u.txid)}:${u.vout}</div>
       <div class="tip-act">A UTXO in their wallet now. Only their key can spend it.</div>`;
   }
 
-  private tipMine(u: Utxo, s: State, selected: boolean): string {
+  private tipMine(u: Utxo, s: State, selected: boolean): SafeHtml {
     const cost = inputCost(s.feeRate);
     const warn = u.value <= cost;
     const origin =
-      u.origin === 'change' ? '<span class="pill change">change</span>' : u.origin === 'payment' ? '<span class="pill pay">received</span>' : '';
-    const pending = !u.confirmed ? '<span class="pill pending">unconfirmed</span>' : '';
+      u.origin === 'change' ? html`<span class="pill change">change</span>` : u.origin === 'payment' ? html`<span class="pill pay">received</span>` : '';
+    const pending = !u.confirmed ? html`<span class="pill pending">unconfirmed</span>` : '';
     const verb = COARSE ? 'Tap' : 'Click';
-    return `
+    return html`
       <div class="tip-v">${sats(u.value)} <small>sats</small> ${origin}${pending}</div>
       <div class="tip-from">${u.from}</div>
       <div class="tip-op"><span>outpoint</span> ${shortTxid(u.txid)}:${u.vout}</div>
@@ -371,10 +411,10 @@ export class Hud {
   private tipW = 270;
   private tipH = 130;
 
-  toast(html: string, kind: '' | 'good' | 'warn' | 'myth' = '', ms = 4200) {
+  toast(content: SafeHtml, kind: '' | 'good' | 'warn' | 'myth' = '', ms = 4200) {
     const el = document.createElement('div');
     el.className = `toast ${kind}`;
-    el.innerHTML = html;
+    setHtml(el, content);
     this.toastsEl.appendChild(el);
     requestAnimationFrame(() => el.classList.add('is-on'));
     window.setTimeout(() => {
@@ -389,7 +429,7 @@ export class Hud {
       this.camBadgeEl.classList.remove('is-on');
       return;
     }
-    this.camBadgeEl.innerHTML = `<span class="rec"></span>CAM ${name}<small><kbd>C</kbd> next · <kbd>R</kbd> or drag to take over</small>`;
+    setHtml(this.camBadgeEl, html`<span class="rec"></span>CAM ${name}<small><kbd>C</kbd> next · <kbd>R</kbd> or drag to take over</small>`);
     this.camBadgeEl.classList.add('is-on');
     this.camTimer = 3.2;
   }
@@ -404,12 +444,14 @@ export class Hud {
   showReceipt(tx: TxRecord, walletCount: number, firstTime: boolean) {
     const inv = tx.invoice;
     const p = tx.plan;
-    $('rc-hint').innerHTML =
+    setHtml(
+      $('rc-hint'),
       tx.mode === 'myth'
-        ? 'Press <kbd>2</kbd> to see what really happened'
+        ? html`Press <kbd>2</kbd> to see what really happened`
         : firstTime
-          ? 'Now try <kbd>1</kbd> — how most people picture this'
-          : 'Change coins are real coins: spend them next.';
+          ? html`Now try <kbd>1</kbd> — how most people picture this`
+          : html`Change coins are real coins: spend them next.`,
+    );
     $('rc-txid').textContent = shortTxid(tx.txid);
     const status = $('rc-status');
     status.textContent = 'unconfirmed';
@@ -417,35 +459,45 @@ export class Hud {
 
     if (tx.mode === 'myth') {
       $('rc-kicker').textContent = 'Balance updated';
-      $('rc-flow').innerHTML = `
+      setHtml(
+        $('rc-flow'),
+        html`
         <div class="myth-flow">
           <span class="big">−${sats(inv.amount + p.fee)}</span>
           <span class="sub">${sats(inv.amount)} to ${inv.to} + ${sats(p.fee)} fee</span>
-        </div>`;
-      $('rc-say').innerHTML = `Simple, right? That’s the story apps tell. But nothing was “subtracted.” Underneath, whole coins were spent and a new one probably came back as change.`;
-      $('btn-next').querySelector('.lbl')!.textContent = 'Next bill';
+        </div>`,
+      );
+      $('rc-say').textContent =
+        'Simple, right? That’s the story apps tell. But nothing was “subtracted.” Underneath, whole coins were spent and a new one probably came back as change.';
     } else {
       $('rc-kicker').textContent = 'Transaction broadcast';
-      const ins = tx.inputs.map((u) => `<span class="rc-coin in">${sats(u.value)}</span>`).join('');
+      const ins = tx.inputs.map((u) => html`<span class="rc-coin in">${sats(u.value)}</span>`);
       const outs = [
-        `<span class="rc-coin pay">${sats(tx.payment.value)}<em>→ ${inv.to}</em></span>`,
-        tx.change ? `<span class="rc-coin change">${sats(tx.change.value)}<em>→ you (change)</em></span>` : '',
-        `<span class="rc-coin fee">${sats(p.fee)}<em>→ miner (the gap)</em></span>`,
-      ].join('');
-      $('rc-flow').innerHTML = `
+        html`<span class="rc-coin pay">${sats(tx.payment.value)}<em>→ ${inv.to}</em></span>`,
+        tx.change ? html`<span class="rc-coin change">${sats(tx.change.value)}<em>→ you (change)</em></span>` : '',
+        html`<span class="rc-coin fee">${sats(p.fee)}<em>→ miner (the gap)</em></span>`,
+      ];
+      setHtml(
+        $('rc-flow'),
+        html`
         <div class="rc-col"><span class="rc-k">Inputs · spent whole</span>${ins}</div>
         <div class="rc-arrow"><span>tx</span></div>
-        <div class="rc-col"><span class="rc-k">Outputs · new coins</span>${outs}</div>`;
+        <div class="rc-col"><span class="rc-k">Outputs · new coins</span>${outs}</div>`,
+      );
       const k = tx.inputs.length;
       const changeLine = tx.change
-        ? `<b class="change">${sats(tx.change.value)}</b> back to you as change`
+        ? html`<b class="change">${sats(tx.change.value)}</b> back to you as change`
         : p.dustToFee > 0
-          ? `no change (the ${sats(p.dustToFee)} leftover was dust)`
-          : 'no change needed';
-      $('rc-say').innerHTML = `You spent ${k} ${plural(k, 'coin')} worth ${sats(p.inputsTotal)} — whole. The transaction made ${sats(tx.payment.value)} for ${inv.to} and ${changeLine}. The <b class="fee">${sats(p.fee)}</b> nobody claimed is the fee. Your wallet: ${walletCount} ${plural(walletCount, 'coin')}.`;
-      $('btn-next').querySelector('.lbl')!.textContent = 'Next bill';
+          ? html`no change — the ${sats(p.dustToFee)} leftover couldn’t pay for a change coin worth keeping`
+          : html`no change needed`;
+      setHtml(
+        $('rc-say'),
+        html`You spent ${k} ${plural(k, 'coin')} worth ${sats(p.inputsTotal)} — whole. The transaction made ${sats(tx.payment.value)} for ${inv.to} and ${changeLine}. The <b class="fee">${sats(p.fee)}</b> nobody claimed is the fee. Your wallet: ${walletCount} ${plural(walletCount, 'coin')}.`,
+      );
     }
     this.receiptEl.classList.add('is-on');
+    this.receiptEl.inert = false;
+    this.announcerEl.textContent = `${$('rc-kicker').textContent}. ${$('rc-say').textContent}`;
   }
 
   confirmReceipt() {
@@ -456,6 +508,17 @@ export class Hud {
 
   hideReceipt() {
     this.receiptEl.classList.remove('is-on');
+    this.receiptEl.inert = true;
+  }
+
+  gpuLost(on: boolean) {
+    const el = $('gpu-lost');
+    el.hidden = !on;
+    el.classList.remove('is-stuck');
+  }
+
+  gpuStuck() {
+    $('gpu-lost').classList.add('is-stuck');
   }
 
   pulseModes() {
