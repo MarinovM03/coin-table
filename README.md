@@ -24,7 +24,7 @@ The toggle at the top switches between two mental models:
 | One glowing balance. Paying subtracts. | Discrete coins. Paying consumes some whole and mints new ones. |
 
 If you pay in the "What people think" view and then switch back, the table shows you what actually
-happened underneath: which coins were spent and which change coin appeared.
+happened underneath: which coins were spent and which change coins appeared.
 
 ## Run it
 
@@ -35,9 +35,9 @@ npm run build      # type-check + production bundle in dist/
 npm run preview    # serve the production build
 ```
 
-It needs Node 18 or newer and a WebGL-capable browser. There's no backend. The demo wallet is
-hard-coded in `src/model/wallet.ts`. It holds nine coins, and none of them covers the first 50,000-sat
-bill on its own, so the first payment always combines two or three whole coins.
+It needs Node ^20.19 or ≥22.12 (what Vite 8 requires) and a browser with WebGL 2. There's no backend.
+The demo wallet is hard-coded in `src/model/wallet.ts`. It holds nine coins, and none of them covers
+the first 50,000-sat bill on its own, so the first payment always combines two or three whole coins.
 
 ## Controls
 
@@ -56,11 +56,14 @@ bill on its own, so the first payment always combines two or three whole coins.
 | Drag · Right-drag · Wheel | Orbit · pan · zoom |
 | `C` | Cinematic tour: starts it, then skips to the next shot. It advances on its own every few seconds, and `R` or any drag takes the camera back |
 | `R` | Reset the view · `Shift`+`R` resets the wallet |
-| `H` | How it works + glossary |
+| `H` or `?` | How it works + glossary |
 | `L` | Toggle coin value labels |
 | `M` | Sound on/off |
 | `/` | Hide the UI (for screenshots) |
 | `Esc` | Close panels / leave cinematic |
+
+Letter shortcuts follow the character printed on your key, so they work on AZERTY, QWERTZ and other
+layouts; `[` `]` and `/` work with AltGr too. The movement keys go by position (ZQSD on AZERTY).
 
 On a phone: tap a coin to add or remove it (taps near a coin count), drag to orbit, pinch to zoom.
 The fee slider has a finger-sized handle.
@@ -74,8 +77,9 @@ The fee slider has a finger-sized handle.
 - Fees are priced per virtual byte, so every extra input makes the transaction (and the fee) bigger.
   The size estimates assume native SegWit P2WPKH: ≈68 vB per input, 31 vB per output, 10.5 vB overhead.
 - Bitcoin Core's default dust threshold for a P2WPKH output is 294 sats. Nodes won't relay transactions
-  that create smaller outputs. That's relay policy, not consensus. When change would be dust, wallets
-  drop it and the leftover goes to the fee. The toy does the same.
+  that create smaller outputs. That's relay policy, not consensus. A change output costs fees too, so
+  when the change would end up below 294 sats after paying for its own output, wallets drop it and the
+  whole leftover goes to the fee. The toy does the same, and says how much the change would have been.
 - A tiny coin can cost more in fees to spend than it's worth. Hover a coin to see its cost at the
   current fee rate. At 14 sat/vB or more, the 900-sat coin turns red.
 - Many wallets shuffle output order, so the toy randomizes which output is `:0` and which is `:1`.
@@ -86,22 +90,31 @@ The fee slider has a finger-sized handle.
 - The coins, their backstories, the txids and outpoints are demo data. They don't exist on-chain.
 - Confirmation is a time-lapse: about 5 seconds here. Real blocks average about 10 minutes.
 - "Pick for me" tries every combination in the small demo wallet and keeps the one with the lowest fee
-  plus the cost of a future change coin. It's in the spirit of Bitcoin Core's waste metric, but it's
-  not Core's algorithm.
+  plus the cost of a future change coin. On a tie it avoids creating change so small it would be
+  expensive to spend later. It's in the spirit of Bitcoin Core's coin selection, but it's not Core's
+  algorithm.
 - The miner is drawn as the newest block on a chain floating in the dark.
+
+## Accessibility
+
+- Everything works from the keyboard. Arrow keys and `Enter` pick coins; hidden panels leave the tab order.
+- Screen readers get one settled sentence per change (not every step of a slider drag), plus the receipt.
+- The operating system's "reduce motion" setting turns off the intro fly-in, camera shake, coin flips
+  and drifting cameras.
 
 ## How it's built
 
 Vite + TypeScript + Three.js, with no framework on top. Everything is procedural: coin faces, reeding,
 table leather, engraved markings and glows are drawn to canvas at runtime. All sound is synthesized
-with Web Audio. The only binary assets are the bundled fonts.
+with Web Audio. The only binary assets are the bundled fonts and the link-preview image.
 
 ```
 src/
   model/      bitcoin.ts (fee, change, dust, coin selection) · wallet.ts (demo UTXOs, bills) · store.ts
   scene/      stage (renderer, lights, post FX) · world (table, vault, miner) · coin · balanceBar
               fx (forge orb, fee sparks, shockwaves) · cameraRig (orbit, WASD, cinematic) · layout · textures
-  ui/hud.ts   title strip, ledger, receipt, tooltips, narration, toasts
+  ui/         hud.ts (title strip, ledger, receipt, tooltips, narration, toasts) · keys.ts (shortcuts)
+  util/       html.ts (escaped markup) · tween · format · motion
   audio/      procedural clinks, whooshes and chimes
   app.ts      orchestration: state → scene, the spend choreography, input
 ```
@@ -109,9 +122,44 @@ src/
 Post-processing: bloom, ACES tone mapping, and a finishing pass with vignette, grain and a little
 chromatic fringing.
 
-Performance: the render scale is capped at 1.5× device pixels. If frames run long for more than a
-second or so, it steps down automatically (to as low as 0.75×). Shaders compile at load, so the first
-spend doesn't stutter.
+Performance: the render scale is capped at 1.5× device pixels. If frames run long, it steps down
+(to as low as 0.75×) and climbs back after a long run of smooth frames. After 20 seconds without input,
+the scene draws at a third of the frame rate until you touch something. Shaders compile at load, so the
+first spend doesn't stutter. three.js ships as its own chunk, so it stays cached across releases.
+Without a GPU (hardware acceleration off, virtual machines, remote desktops), the page detects the
+software renderer and draws a plainer scene — no bloom, shadows or decorative lights — at half scale.
+
+## Testing
+
+```bash
+npm test                          # unit tests: fee/change/dust math, coin picking, escaping, shortcuts, layout
+npm run lint                      # Biome
+npm run typecheck                 # app and tooling
+npx playwright install chromium   # once
+npm run test:e2e                  # builds, serves and plays a full payment in headless Chromium
+```
+
+GitHub Actions runs all of these on every push and pull request (`.github/workflows/ci.yml`), and
+Dependabot opens weekly dependency updates.
+
+## Deploying
+
+`npm run build` produces a static site in `dist/` that works from any path, including a GitHub Pages
+project URL. To get link previews with the share image, build with your site's address:
+
+```bash
+SITE_URL=https://you.github.io/coin-table/ npm run build
+```
+
+The built page carries a strict Content-Security-Policy and a no-referrer policy. If your host lets you
+set response headers, also send:
+
+```
+X-Content-Type-Options: nosniff
+Content-Security-Policy: frame-ancestors 'none'
+```
+
+(`frame-ancestors` only works as a header, not in the page's meta tag.)
 
 ## Credits
 
