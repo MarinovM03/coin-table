@@ -110,14 +110,21 @@ with Web Audio. The only binary assets are the bundled fonts and the link-previe
 
 ```
 src/
-  model/      bitcoin.ts (fee, change, dust, coin selection) · wallet.ts (demo UTXOs, bills) · store.ts
-  scene/      stage (renderer, lights, post FX) · world (table, vault, miner) · coin · balanceBar
-              fx (forge orb, fee sparks, shockwaves) · cameraRig (orbit, WASD, cinematic) · layout · textures
-  ui/         hud.ts (title strip, ledger, receipt, tooltips, narration, toasts) · keys.ts (shortcuts)
-  util/       html.ts (escaped markup) · tween · format · motion
+  app/        app (wires everything, runs the frame loop) · controller (everything the player can do)
+              payments (the spend in both views, the block, the reveal) · pointer · keyboard · invite
+  model/      bitcoin (fee, change, dust, coin selection) · tx (building and applying a payment)
+              wallet (demo UTXOs, bills) · store (state and selectors)
+  scene/      stage (renderer, lights, post FX) · world (table, vault) · miner · glow · coin · coins
+              balanceBar · fx (forge orb, fee sparks, shockwaves) · cameraRig (orbit, WASD, cinematic)
+              layout · textures
+  ui/         hud (the page shell) · ledger · narrator · receipt · tooltip · ticker · dom · keys (shortcuts)
+  styles/     one stylesheet per part of the page; style.css imports them in cascade order
+  util/       html (escaped markup) · tween · format · motion
   audio/      procedural clinks, whooshes and chimes
-  app.ts      orchestration: state → scene, the spend choreography, input
 ```
+
+The model is plain TypeScript with no DOM or three.js, so it's unit-tested directly. The scene and
+the HUD only draw; `app/` decides what happens and when.
 
 Post-processing: bloom, ACES tone mapping, and a finishing pass with vignette, grain and a little
 chromatic fringing.
@@ -132,7 +139,7 @@ software renderer and draws a plainer scene — no bloom, shadows or decorative 
 ## Testing
 
 ```bash
-npm test                          # unit tests: fee/change/dust math, coin picking, escaping, shortcuts, layout
+npm test                          # unit tests: fee/change/dust math, coin picking, payments, escaping, shortcuts, layout
 npm run lint                      # Biome
 npm run typecheck                 # app and tooling
 npx playwright install chromium   # once
