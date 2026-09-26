@@ -1,0 +1,130 @@
+:root {
+  --bg: #06070a;
+  --panel: rgba(13, 15, 20, 0.66);
+  --panel-solid: #0e1016;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --text: #ece7dd;
+  --muted: #8e8a82;
+  --dim: #858077;
+  --gold: #f2c066;
+  --gold-2: #ffe0a0;
+  --gold-deep: #b98d4a;
+  --pay: #8fcaff;
+  --fee: #ff8a4c;
+  --change: #f2c066;
+  --bad: #ff6a5a;
+  --warn: #ffb44d;
+  --cyan: #5fd0ff;
+  --accent: var(--gold);
+  --radius: 14px;
+  --sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --pad: clamp(16px, 2.2vw, 28px);
+  /* Matches Stage.resize(): the scene is framed left of the ledger. */
+  --scene-shift: min(150px, 10vw);
+  color-scheme: dark;
+}
+
+body[data-mode='myth'] {
+  --accent: var(--cyan);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'ss01', 'cv11';
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold-2);
+  outline-offset: 2px;
+}
+
+body[data-mode='myth'] :focus-visible {
+  outline-color: #bfe9ff;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.7em;
+  height: 1.7em;
+  padding: 0 0.4em;
+  font-family: var(--mono);
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--line-2);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  vertical-align: 0.05em;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+}
+
+#gl {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+#labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+@media (max-width: 860px) {
+  :root {
+    --pad: 14px;
+    --scene-shift: 0px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

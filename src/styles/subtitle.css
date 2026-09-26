@@ -1,0 +1,138 @@
+.subtitle {
+  position: absolute;
+  left: calc(50% - var(--scene-shift));
+  bottom: calc(var(--pad) + 6px);
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 2 * var(--pad)));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  transition:
+    opacity 0.4s,
+    transform 0.6s var(--ease);
+}
+
+body[data-phase='receipt'] .subtitle,
+body[data-phase='sending'] .subtitle .coach {
+  opacity: 0;
+}
+
+body[data-phase='receipt'] .subtitle {
+  transform: translate(-50%, 20px);
+}
+
+.narrator {
+  margin: 0;
+  padding: 0 8px;
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: center;
+  color: #e4ded2;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.9),
+    0 0 18px rgba(0, 0, 0, 0.95),
+    0 0 40px rgba(0, 0, 0, 0.8);
+  text-wrap: balance;
+}
+
+.narrator kbd {
+  text-shadow: none;
+}
+
+.narrator.bump {
+  animation: bump 0.45s var(--ease);
+}
+
+@keyframes bump {
+  from {
+    opacity: 0.35;
+    transform: translateY(3px);
+  }
+}
+
+.narrator b {
+  color: var(--text);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+b.fee,
+.fee {
+  color: var(--fee) !important;
+}
+
+b.change {
+  color: var(--change) !important;
+}
+
+b.bad {
+  color: var(--bad) !important;
+}
+
+.coach {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    transform 0.5s var(--ease),
+    opacity 0.4s;
+}
+
+.coach.is-on {
+  transform: none;
+  opacity: 1;
+}
+
+.coach span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+  background: rgba(12, 14, 19, 0.9);
+  border: 1px solid rgba(242, 192, 102, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 14px 40px -12px rgba(0, 0, 0, 0.9),
+    0 0 30px -10px rgba(242, 192, 102, 0.4);
+  white-space: nowrap;
+  animation: float 3s ease-in-out infinite;
+}
+
+body[data-mode='myth'] .coach span {
+  border-color: rgba(95, 208, 255, 0.3);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 14px 40px -12px rgba(0, 0, 0, 0.9),
+    0 0 30px -10px rgba(95, 208, 255, 0.4);
+}
+
+.coach b {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+
+@keyframes float {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@media (max-width: 860px) {
+  .subtitle {
+    bottom: calc(46vh + 64px);
+  }
+
+  .narrator {
+    font-size: 13px;
+  }
+
+  .coach {
+    display: none;
+  }
+}

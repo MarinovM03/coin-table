@@ -1,0 +1,99 @@
+.toasts {
+  position: absolute;
+  top: calc(var(--pad) + 76px);
+  left: calc(50% - var(--scene-shift));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(500px, calc(100vw - 2 * var(--pad)));
+}
+
+.toast {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--text);
+  background: rgba(12, 14, 19, 0.94);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 16px 40px -14px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+  transition:
+    opacity 0.4s,
+    transform 0.5s var(--ease);
+}
+
+.toast.is-on {
+  opacity: 1;
+  transform: none;
+}
+
+.toast.good {
+  border-color: rgba(242, 192, 102, 0.4);
+}
+
+.toast.warn {
+  border-color: rgba(255, 180, 77, 0.45);
+  color: #ffe3bd;
+}
+
+.toast .muted {
+  color: var(--muted);
+}
+
+.toast b {
+  color: var(--gold-2);
+}
+
+.cam-badge {
+  position: absolute;
+  left: var(--pad);
+  bottom: var(--pad);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(12, 14, 19, 0.7);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.4s,
+    transform 0.5s var(--ease);
+}
+
+.cam-badge small {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--dim);
+  font-family: var(--sans);
+}
+
+.cam-badge.is-on {
+  opacity: 1;
+  transform: none;
+}
+
+.rec {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5a4a;
+  box-shadow: 0 0 10px #ff5a4a;
+  animation: blink 1.2s infinite;
+}
+
+@media (max-width: 860px) {
+  .toasts {
+    top: 90px;
+  }
+}

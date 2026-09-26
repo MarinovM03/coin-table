@@ -1,0 +1,40 @@
+.legend {
+  position: absolute;
+  right: var(--pad);
+  bottom: var(--pad);
+  width: 336px;
+  pointer-events: none;
+}
+
+.legend-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 12px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.legend-grid span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.legend kbd {
+  font-size: 10.5px;
+  color: #a9a398;
+}
+
+@media (max-height: 820px) {
+  .legend {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .legend {
+    display: none;
+  }
+}

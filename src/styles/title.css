@@ -1,0 +1,136 @@
+.title {
+  position: absolute;
+  top: var(--pad);
+  left: var(--pad);
+  width: min(390px, calc(100vw - 2 * var(--pad)));
+  pointer-events: none;
+}
+
+.title > * {
+  pointer-events: auto;
+}
+
+.wordmark {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.86;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  font-weight: 800;
+  font-size: clamp(30px, 2.9vw, 42px);
+}
+
+.wordmark span {
+  color: var(--text);
+}
+
+.wordmark em {
+  font-style: normal;
+  background: linear-gradient(100deg, #fff1c9 0%, var(--gold) 35%, #c9913f 70%, #ffe7ae 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sheen 7s ease-in-out infinite;
+}
+
+body[data-mode='myth'] .wordmark em {
+  background-image: linear-gradient(100deg, #e5f7ff 0%, var(--cyan) 35%, #2f8fc0 70%, #d9f3ff 100%);
+}
+
+@keyframes sheen {
+  0%,
+  100% {
+    background-position: 0% 0;
+  }
+  50% {
+    background-position: 100% 0;
+  }
+}
+
+.tagline {
+  margin: 10px 0 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(19px, 1.6vw, 23px);
+  line-height: 1.15;
+  color: var(--gold-2);
+}
+
+body[data-mode='myth'] .tagline {
+  color: #bfe9ff;
+}
+
+.lede {
+  margin: 10px 0 0;
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.lede b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stats {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(13, 15, 20, 0.78);
+}
+
+.stat .k {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 600;
+}
+
+.stat .v {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  transition: color 0.4s;
+}
+
+@media (max-width: 1180px) {
+  .lede {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .title {
+    width: calc(100vw - 2 * var(--pad) - 90px);
+  }
+
+  .wordmark {
+    flex-direction: row;
+    gap: 8px;
+    font-size: 24px;
+  }
+
+  .tagline {
+    margin-top: 6px;
+    font-size: 16px;
+  }
+
+  .stats,
+  .lede {
+    display: none;
+  }
+}

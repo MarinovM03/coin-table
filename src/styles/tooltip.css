@@ -1,0 +1,112 @@
+.tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 270px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: rgba(10, 12, 16, 0.95);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 20px 50px -16px rgba(0, 0, 0, 0.95);
+  opacity: 0;
+  transition: opacity 0.18s;
+  font-size: 12px;
+  line-height: 1.45;
+  z-index: 6;
+}
+
+.tip.is-on {
+  opacity: 1;
+}
+
+.tip-v {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold-2);
+}
+
+.tip-v small {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.tip-from {
+  margin-top: 2px;
+  color: #d4cec2;
+}
+
+.tip-op {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tip-op span {
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+.tip-cost {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.tip-cost b {
+  color: var(--fee);
+  font-family: var(--mono);
+}
+
+.tip-cost.bad {
+  color: #ffc4bb;
+}
+
+.tip-act {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.pill {
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  transform: translateY(-2px);
+}
+
+.pill.change {
+  color: #1a1206;
+  background: var(--gold);
+}
+
+.pill.pay {
+  color: #04121a;
+  background: var(--pay);
+}
+
+.pill.pending {
+  color: var(--warn);
+  border: 1px solid rgba(255, 180, 77, 0.45);
+}
+
+@media (max-width: 860px) {
+  .tip {
+    width: 230px;
+  }
+}

@@ -1,0 +1,94 @@
+.nogl,
+.noscript {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.noscript {
+  z-index: 20;
+  background: var(--bg);
+}
+
+body.no-webgl .hud,
+body.no-webgl .unhide {
+  display: none;
+}
+
+.gpu-lost {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text);
+  background: rgba(6, 7, 10, 0.86);
+}
+
+.gpu-lost[hidden] {
+  display: none;
+}
+
+.gpu-lost p {
+  margin: 0;
+}
+
+.gpu-lost .gpu-stuck,
+.gpu-lost .btn,
+.gpu-lost.is-stuck .gpu-wait {
+  display: none;
+}
+
+.gpu-lost.is-stuck .gpu-stuck {
+  display: block;
+}
+
+.gpu-lost.is-stuck .btn {
+  display: inline-flex;
+  width: 180px;
+  justify-content: center;
+}
+
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--bg);
+  pointer-events: none;
+  transition: opacity 1.4s ease 0.15s;
+}
+
+.veil.is-off {
+  opacity: 0;
+}
+
+.unhide {
+  position: fixed;
+  right: var(--pad);
+  bottom: var(--pad);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--dim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s;
+  cursor: pointer;
+}
+
+body.ui-hidden .unhide {
+  opacity: 0.6;
+  pointer-events: auto;
+}
