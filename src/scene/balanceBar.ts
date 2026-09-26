@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { sats } from '../util/format';
+import { html, setHtml } from '../util/html';
 import { clamp, damp, ease, tweens } from '../util/tween';
 import { LAYOUT } from './layout';
 
@@ -75,7 +76,7 @@ export class BalanceBar {
 
     this.tagEl = document.createElement('div');
     this.tagEl.className = 'bar-tag';
-    this.tagEl.innerHTML = `<span class="k">Balance</span><span class="v">0</span><span class="u">sats</span>`;
+    setHtml(this.tagEl, html`<span class="k">Balance</span><span class="v">0</span><span class="u">sats</span>`);
     const tag = new CSS2DObject(this.tagEl);
     tag.position.set(0, 1.55, 0);
     this.group.add(tag);

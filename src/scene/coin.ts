@@ -3,6 +3,8 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { Utxo } from '../model/wallet';
 import { shortTxid } from '../model/wallet';
 import { compact } from '../util/format';
+import { html, setHtml } from '../util/html';
+import { reducedMotion } from '../util/motion';
 import { clamp, damp, ease } from '../util/tween';
 import { coinSize } from './layout';
 import { coinFaceTexture, contactShadowTexture, reedTexture } from './textures';
@@ -63,7 +65,7 @@ export class CoinView {
   readonly ringMat: THREE.MeshBasicMaterial;
   readonly chip: CSS2DObject;
   readonly chipEl: HTMLDivElement;
-  readonly faceTex: THREE.Texture;
+  private faceTex: THREE.Texture;
 
   utxo: Utxo;
   /** Where the coin wants to rest when idle. */
@@ -179,7 +181,7 @@ export class CoinView {
 
     this.chipEl = document.createElement('div');
     this.chipEl.className = 'coin-chip';
-    this.chipEl.innerHTML = `<span class="v">${compact(utxo.value)}</span>`;
+    setHtml(this.chipEl, html`<span class="v">${compact(utxo.value)}</span>`);
     this.chip = new CSS2DObject(this.chipEl);
     this.chip.position.set(0, t + 0.34, -r * 0.2);
     this.body.add(this.chip);
@@ -203,7 +205,7 @@ export class CoinView {
         t: -(opts.delay ?? 0),
         dur: opts.dur ?? THREE.MathUtils.clamp(0.35 + dist * 0.09, 0.4, 0.9),
         arc: opts.arc ?? Math.min(1.4, 0.25 + dist * 0.16),
-        flips: opts.flips ?? 0,
+        flips: reducedMotion() ? 0 : (opts.flips ?? 0),
         ease: opts.ease ?? ease.inOutCubic,
         resolve,
       };
@@ -217,6 +219,14 @@ export class CoinView {
   /** Brief scale pop. */
   bump() {
     this.pop = POP_TIME;
+  }
+
+  redrawFace() {
+    const tex = coinFaceTexture(this.utxo.value, `${shortTxid(this.utxo.txid)}:${this.utxo.vout}`);
+    this.faceMat.map = tex;
+    this.faceMat.bumpMap = tex;
+    this.faceTex.dispose();
+    this.faceTex = tex;
   }
 
   update(dt: number, time: number) {
@@ -248,7 +258,7 @@ export class CoinView {
 
     const hl = Math.max(this.hover, this.focus);
     const lift = hl * 0.24 + this.sel * 0.05 + this.invite * 0.06;
-    const bob = hl > 0.05 ? Math.sin(time * 3 + this.seed) * 0.014 * hl : 0;
+    const bob = hl > 0.05 && !reducedMotion() ? Math.sin(time * 3 + this.seed) * 0.014 * hl : 0;
     this.body.position.y = this.t / 2 + lift + bob - this.sink * 0.5;
     this.body.rotation.set(
       this.flip + Math.sin(time * 2 + this.seed) * 0.03 * hl + this.spin * 0.4,

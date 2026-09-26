@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { damp } from '../util/tween';
+import { html, setHtml } from '../util/html';
 import { LAYOUT, TABLE_RADIUS } from './layout';
 import { glowTexture, radialTexture, tableTextures } from './textures';
 
@@ -102,6 +103,7 @@ export class World {
   private dust: THREE.Points;
   private dustVel: Float32Array;
   private cone: THREE.Mesh;
+  private tableMat: THREE.MeshStandardMaterial;
   txSpin = 0;
 
   constructor(scene: THREE.Scene) {
@@ -109,10 +111,8 @@ export class World {
     const R = TABLE_RADIUS;
 
     const { map, rough } = tableTextures();
-    const top = new THREE.Mesh(
-      new THREE.CircleGeometry(R, 160),
-      new THREE.MeshStandardMaterial({ map, roughnessMap: rough, roughness: 1, metalness: 0.0, envMapIntensity: 0.45 }),
-    );
+    this.tableMat = new THREE.MeshStandardMaterial({ map, roughnessMap: rough, roughness: 1, metalness: 0.0, envMapIntensity: 0.45 });
+    const top = new THREE.Mesh(new THREE.CircleGeometry(R, 160), this.tableMat);
     top.rotation.x = -Math.PI / 2;
     top.receiveShadow = true;
     this.group.add(top);
@@ -299,6 +299,14 @@ export class World {
     this.group.add(this.miner.group);
   }
 
+  refreshTable() {
+    const { map, rough } = tableTextures();
+    this.tableMat.map?.dispose();
+    this.tableMat.roughnessMap?.dispose();
+    this.tableMat.map = map;
+    this.tableMat.roughnessMap = rough;
+  }
+
   private buildVault() {
     const pillarMat = new THREE.MeshStandardMaterial({ color: '#101218', roughness: 0.6, metalness: 0.3 });
     const trimMat = new THREE.MeshStandardMaterial({ color: '#2a2217', roughness: 0.4, metalness: 0.8, emissive: '#3a2a12', emissiveIntensity: 0.25 });
@@ -419,13 +427,12 @@ export class Miner {
 
     this.labelEl = document.createElement('div');
     this.labelEl.className = 'world-tag world-tag--miner';
-    this.labelEl.innerHTML = `<b>Miner</b><span>collects the fee for putting your transaction in a block</span><em class="fees"></em>`;
+    setHtml(this.labelEl, html`<b>Miner</b><span>collects the fee for putting your transaction in a block</span><em class="fees"></em>`);
     this.label = new CSS2DObject(this.labelEl);
     this.label.position.set(0, -1.05, 0);
     this.group.add(this.label);
   }
 
-  /** Called as fee sparks arrive. */
   absorb(amount: number) {
     this.fees += amount;
     this.energy = Math.min(1.6, this.energy + 0.35);
@@ -442,7 +449,6 @@ export class Miner {
     this.labelEl.classList.add('is-hot');
   }
 
-  /** Block found. */
   pulse() {
     this.pulseT = 1;
     this.labelEl.classList.remove('is-hot');

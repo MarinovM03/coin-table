@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { reducedMotion } from '../util/motion';
 import { damp, ease } from '../util/tween';
 
 export interface Shot {
@@ -170,16 +171,28 @@ export class CameraRig {
     this.hold = -4;
   }
 
+  get busy(): boolean {
+    return !!this.flight || this.touring || this.keys.size > 0 || this.punch > 0.001 || this.shake > 0;
+  }
+
   /** Brief FOV punch-in. */
   kick(amount = 0.06) {
+    if (reducedMotion()) return;
     this.punch = Math.max(this.punch, amount);
   }
 
   rumble(amount = 0.05) {
+    if (reducedMotion()) return;
     this.shake = Math.max(this.shake, amount);
   }
 
   intro() {
+    if (reducedMotion()) {
+      this.camera.position.copy(this.shotPos(HOME));
+      this.controls.target.set(...HOME.target);
+      this.controls.update();
+      return;
+    }
     this.camera.position.set(3, 15.5, 21).multiplyScalar(this.distScale());
     this.controls.target.set(0.3, 0.6, 0);
     this.fovMul = 1.08;
@@ -209,7 +222,7 @@ export class CameraRig {
       cam.position.setFromSpherical(sph).add(c.target);
       this.fovMul = f.fromFov + (f.toFov - f.fromFov) * e;
       if (k >= 1) this.flight = null;
-    } else if (this.driftRate !== 0) {
+    } else if (this.driftRate !== 0 && !reducedMotion()) {
       this.tmp.copy(cam.position).sub(c.target);
       this.tmp.applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.driftRate * dt);
       cam.position.copy(c.target).add(this.tmp);
