@@ -23,6 +23,15 @@ export function inputCost(feeRate: number): number {
   return INPUT_VB * feeRate;
 }
 
+export function droppedChangeValue(plan: TxPlan): number {
+  return plan.dustToFee - OUTPUT_VB * plan.feeRate;
+}
+
+/** Change smaller than this costs a big share of itself to spend later. */
+export function minUsefulChange(feeRate: number): number {
+  return 10 * inputCost(feeRate);
+}
+
 export interface TxPlan {
   inputsTotal: number;
   inputCount: number;
@@ -100,9 +109,10 @@ export function pickCoins<T extends { value: number }>(coins: readonly T[], paym
   if (n === 0) return null;
   if (n > 16) return largestFirst(coins, payment, feeRate);
 
-  let best: { mask: number; score: number; count: number; total: number } | null = null;
+  let best: { mask: number; score: number; count: number; tiny: boolean; total: number } | null = null;
   const values = coins.map((c) => c.value);
   const changeCost = (OUTPUT_VB + INPUT_VB) * feeRate;
+  const floor = minUsefulChange(feeRate);
 
   for (let mask = 1; mask < 1 << n; mask++) {
     const picked: number[] = [];
@@ -110,12 +120,15 @@ export function pickCoins<T extends { value: number }>(coins: readonly T[], paym
     const plan = planTx(picked, payment, feeRate);
     if (!plan.ok) continue;
     const score = plan.fee + (plan.hasChange ? changeCost : 0);
-    // Ties: fewer inputs, then the smaller total (less value parked in change).
+    const tiny = plan.hasChange && plan.change < floor;
+    // Ties: fewer inputs, then avoid tiny change, then the smaller total (less value parked in change).
     const better =
       !best ||
       score < best.score ||
-      (score === best.score && (picked.length < best.count || (picked.length === best.count && plan.inputsTotal < best.total)));
-    if (better) best = { mask, score, count: picked.length, total: plan.inputsTotal };
+      (score === best.score &&
+        (picked.length < best.count ||
+          (picked.length === best.count && (tiny !== best.tiny ? !tiny : plan.inputsTotal < best.total))));
+    if (better) best = { mask, score, count: picked.length, tiny, total: plan.inputsTotal };
   }
   if (!best) return null;
   return coins.filter((_, i) => best!.mask & (1 << i));
