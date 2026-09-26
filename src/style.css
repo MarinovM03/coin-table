@@ -49,6 +49,27 @@ body {
   font-feature-settings: 'ss01', 'cv11';
 }
 
+:focus-visible {
+  outline: 2px solid var(--gold-2);
+  outline-offset: 2px;
+}
+
+body[data-mode='myth'] :focus-visible {
+  outline-color: #bfe9ff;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 button {
   font: inherit;
   color: inherit;
@@ -92,12 +113,65 @@ kbd {
   overflow: hidden;
 }
 
-.nogl {
+.nogl,
+.noscript {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  line-height: 1.5;
   color: var(--muted);
+}
+
+.noscript {
+  z-index: 20;
+  background: var(--bg);
+}
+
+body.no-webgl .hud,
+body.no-webgl .unhide {
+  display: none;
+}
+
+.gpu-lost {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text);
+  background: rgba(6, 7, 10, 0.86);
+}
+
+.gpu-lost[hidden] {
+  display: none;
+}
+
+.gpu-lost p {
+  margin: 0;
+}
+
+.gpu-lost .gpu-stuck,
+.gpu-lost .btn,
+.gpu-lost.is-stuck .gpu-wait {
+  display: none;
+}
+
+.gpu-lost.is-stuck .gpu-stuck {
+  display: block;
+}
+
+.gpu-lost.is-stuck .btn {
+  display: inline-flex;
+  width: 180px;
+  justify-content: center;
 }
 
 .hud {
@@ -229,7 +303,7 @@ body[data-mode='myth'] .tagline {
 }
 
 .stat .k {
-  font-size: 9.5px;
+  font-size: 10.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--dim);
@@ -331,7 +405,7 @@ b.bad {
 }
 
 .modes-label {
-  font-size: 9.5px;
+  font-size: 10.5px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--dim);
@@ -578,7 +652,7 @@ body[data-mode='reality'] .myth-only {
 .bank-k,
 .rc-k,
 .receipt-head .k {
-  font-size: 9.5px;
+  font-size: 10.5px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   font-weight: 600;
@@ -1007,6 +1081,11 @@ input[type='range']::-moz-range-thumb {
     0 0 18px rgba(255, 138, 76, 0.6);
 }
 
+input[type='range']:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 input[type='range']:hover::-webkit-slider-thumb,
 input[type='range']:focus-visible::-webkit-slider-thumb {
   transform: scale(1.15);
@@ -1020,7 +1099,7 @@ input[type='range']:focus-visible::-webkit-slider-thumb {
 }
 
 .fee-scale kbd {
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .actions {
@@ -1062,7 +1141,7 @@ body[data-mode='myth'] .actions {
 }
 
 .btn kbd {
-  font-size: 9.5px;
+  font-size: 10.5px;
 }
 
 .btn.primary {
@@ -1307,6 +1386,12 @@ body.ui-hidden .receipt.is-on {
   margin-top: 12px;
 }
 
+.rc-next {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .rc-hint {
   margin-right: auto;
   font-size: 12.5px;
@@ -1317,13 +1402,6 @@ body.ui-hidden .receipt.is-on {
   color: var(--text);
 }
 
-.receipt-foot .btn.primary {
-  width: 200px;
-  height: 40px;
-  font-size: 13.5px;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.07);
-}
 
 .myth-flow {
   grid-column: 1 / -1;
@@ -1541,7 +1619,7 @@ body[data-term='vb'] .row-fee {
 }
 
 .legend kbd {
-  font-size: 9.5px;
+  font-size: 10.5px;
   color: #a9a398;
 }
 
@@ -1743,7 +1821,7 @@ body[data-mode='myth'] .coach span {
 .tip-op span {
   color: var(--dim);
   font-family: var(--sans);
-  font-size: 9.5px;
+  font-size: 10.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   margin-right: 4px;
@@ -1773,7 +1851,7 @@ body[data-mode='myth'] .coach span {
 
 .pill {
   font-family: var(--sans);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1844,7 +1922,7 @@ body[data-mode='myth'] .coach span {
 .coin-chip.is-fresh .v::after {
   content: 'new';
   font-family: var(--sans);
-  font-size: 8.5px;
+  font-size: 9.5px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 1px 4px;
@@ -2132,7 +2210,7 @@ body[data-mode='myth'] .coach span {
 
 .flow-inner em {
   font-style: normal;
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -2201,7 +2279,7 @@ body[data-mode='myth'] .coach span {
 .eq .t i {
   font-family: var(--sans);
   font-style: normal;
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -2336,8 +2414,20 @@ body.ui-hidden .unhide {
   .world-tag--miner {
     display: none;
   }
+  .callout-body {
+    padding: 6px 10px;
+  }
+  .callout-body small {
+    display: none;
+  }
+  .callout-body b {
+    font-size: 13px;
+  }
+  .callout-arrow {
+    width: 20px;
+  }
   .coin-chip .v {
-    font-size: 9.5px;
+    font-size: 10.5px;
     padding: 1px 5px;
   }
   .inv-memo,
