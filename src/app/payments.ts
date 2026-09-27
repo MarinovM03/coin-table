@@ -6,6 +6,7 @@ import { applyTx, buildTx, confirmTx } from '../model/tx';
 import type { Utxo } from '../model/wallet';
 import { CoinView } from '../scene/coin';
 import { LAYOUT, findWalletSpot } from '../scene/layout';
+import { COARSE, refillHint } from '../ui/dom';
 import { plural, sats } from '../util/format';
 import { html, type SafeHtml } from '../util/html';
 import { clamp, ease, tweens } from '../util/tween';
@@ -49,7 +50,7 @@ export class Payments {
     if (!plan.ok) {
       sfx.deny();
       hud.ledger.shake();
-      if (plan.inputCount === 0) hud.toast(html`Pick at least one coin first — click one on the table.`, 'warn', 2600);
+      if (plan.inputCount === 0) hud.toast(html`Pick at least one coin first — ${COARSE ? 'tap' : 'click'} one on the table.`, 'warn', 2600);
       return;
     }
     const ep = this.epoch;
@@ -229,7 +230,7 @@ export class Payments {
     if (!picked) {
       sfx.deny();
       hud.ledger.shake();
-      hud.toast(html`Balance too low for ${sats(inv.amount)} plus fee. <kbd>⇧R</kbd> refills the wallet.`, 'warn');
+      hud.toast(html`Balance too low for ${sats(inv.amount)} plus fee. ${refillHint()}`, 'warn');
       return;
     }
     const ep = this.epoch;

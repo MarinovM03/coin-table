@@ -2,7 +2,7 @@ import type { TxRecord } from '../model/store';
 import { shortTxid } from '../model/wallet';
 import { plural, sats } from '../util/format';
 import { html, setHtml } from '../util/html';
-import { $ } from './dom';
+import { $, PRESS, hint } from './dom';
 
 export class Receipt {
   private el = $('receipt');
@@ -13,9 +13,9 @@ export class Receipt {
     setHtml(
       $('rc-hint'),
       tx.mode === 'myth'
-        ? html`Press <kbd>2</kbd> to see what really happened`
+        ? html`${PRESS} ${hint('2', 'What Bitcoin does')} to see what really happened`
         : firstTime
-          ? html`Now try <kbd>1</kbd> — how most people picture this`
+          ? html`Now try ${hint('1', 'What people think')} — how most people picture this`
           : html`Change coins are real coins: spend them next.`,
     );
     $('rc-txid').textContent = shortTxid(tx.txid);

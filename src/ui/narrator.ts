@@ -1,8 +1,9 @@
-import type { TxPlan } from '../model/bitcoin';
+import { pickCoins, type TxPlan } from '../model/bitcoin';
 import { invoiceOf, type State } from '../model/store';
+import { walletTotal } from '../model/wallet';
 import { compact, plural, sats } from '../util/format';
 import { html, setHtml, type SafeHtml } from '../util/html';
-import { $, COARSE } from './dom';
+import { $, COARSE, PRESS, hint, refillHint } from './dom';
 
 export class Narrator {
   private narratorEl = $('narrator');
@@ -21,11 +22,13 @@ export class Narrator {
     const inv = invoiceOf(s);
     const n = s.utxos.length;
     let t: SafeHtml;
-    if (s.mode === 'myth') {
+    if (s.phase === 'select' && !pickCoins(s.utxos, inv.amount, s.feeRate)) {
+      t = html`Your whole wallet holds ${sats(walletTotal(s.utxos))} sats — not enough for ${sats(inv.amount)} plus the fee. ${refillHint()}`;
+    } else if (s.mode === 'myth') {
       t =
         s.phase === 'receipt'
-          ? html`The number went down. That’s all this view can show. Press <kbd>2</kbd> — the coins underneath changed shape.`
-          : html`The bank-app picture: one number, and paying just subtracts. Press <kbd>Space</kbd> to pay ${inv.to}, then <kbd>2</kbd> to look underneath.`;
+          ? html`The number went down. That’s all this view can show. ${PRESS} ${hint('2', 'What Bitcoin does')} — the coins underneath changed shape.`
+          : html`The bank-app picture: one number, and paying just subtracts. ${PRESS} ${hint('Space', 'Send')} to pay ${inv.to}, then ${hint('2', 'What Bitcoin does')} to look underneath.`;
     } else if (s.phase === 'sending') {
       t = html`Inputs are consumed whole. New outputs are being created…`;
     } else if (s.phase === 'receipt' && s.lastTx) {
@@ -69,12 +72,17 @@ export class Narrator {
     const inv = invoiceOf(s);
     if (s.phase === 'sending') t = null;
     else if (s.mode === 'myth')
-      t = s.phase === 'receipt' ? html`Press <kbd>2</kbd> to see what actually happened` : html`Press <kbd>Space</kbd> to pay ${sats(inv.amount)}`;
+      t = s.phase === 'receipt' ? html`${PRESS} ${hint('2', 'What Bitcoin does')} to see what actually happened` : html`${PRESS} ${hint('Space', 'Send')} to pay ${sats(inv.amount)}`;
     else if (s.phase === 'receipt')
-      t = s.history.length === 1 ? html`Now press <kbd>1</kbd> to see how most people picture it` : html`Press <kbd>Space</kbd> for the next bill`;
+      t =
+        s.history.length === 1
+          ? html`Now ${PRESS.toLowerCase()} ${hint('1', 'What people think')} to see how most people picture it`
+          : COARSE
+            ? html`Tap <b>Next bill</b>`
+            : html`Press <kbd>Space</kbd> for the next bill`;
     else if (plan.inputCount === 0) t = html`${COARSE ? 'Tap' : 'Click'} coins to cover <b>${sats(inv.amount)}</b> + fee`;
     else if (!plan.ok) t = html`Add a coin — <b>${sats(plan.shortBy)}</b> short`;
-    else t = html`Press <kbd>Space</kbd> to send`;
+    else t = COARSE ? html`Tap <b>Send</b>` : html`Press <kbd>Space</kbd> to send`;
     const key = t?.value ?? '';
     if (key !== this.lastCoach) {
       this.lastCoach = key;
