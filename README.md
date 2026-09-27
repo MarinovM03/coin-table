@@ -65,8 +65,9 @@ the first 50,000-sat bill on its own, so the first payment always combines two o
 Letter shortcuts follow the character printed on your key, so they work on AZERTY, QWERTZ and other
 layouts; `[` `]` and `/` work with AltGr too. The movement keys go by position (ZQSD on AZERTY).
 
-On a phone: tap a coin to add or remove it (taps near a coin count), drag to orbit, pinch to zoom.
-The fee slider has a finger-sized handle.
+On a phone or tablet: tap a coin on the table, or its button in the ledger's coin row, to add or
+remove it. One finger orbits (a tap never swings the camera), two fingers pinch to zoom and pan. When
+the wallet can't cover a bill, Send becomes Refill wallet. In landscape the ledger moves to the side.
 
 ## What's real and what's art
 
@@ -99,6 +100,9 @@ The fee slider has a finger-sized handle.
 
 - Everything works from the keyboard. Arrow keys and `Enter` pick coins; hidden panels leave the tab order.
 - Screen readers get one settled sentence per change (not every step of a slider drag), plus the receipt.
+- When arrow-key focus rests on a coin, its value, origin and fee cost are announced; the canvas is
+  focusable and takes the coin's card as its description. On touch screens the coins are also toggle
+  buttons in the ledger.
 - The operating system's "reduce motion" setting turns off the intro fly-in, camera shake, coin flips
   and drifting cameras.
 
@@ -135,6 +139,7 @@ the scene draws at a third of the frame rate until you touch something. Shaders 
 first spend doesn't stutter. three.js ships as its own chunk, so it stays cached across releases.
 Without a GPU (hardware acceleration off, virtual machines, remote desktops), the page detects the
 software renderer and draws a plainer scene — no bloom, shadows or decorative lights — at half scale.
+Phones and tablets start at 1× and climb to 1.25× only while frames stay smooth.
 
 ## Testing
 
@@ -142,12 +147,28 @@ software renderer and draws a plainer scene — no bloom, shadows or decorative 
 npm test                          # unit tests: fee/change/dust math, coin picking, payments, escaping, shortcuts, layout
 npm run lint                      # Biome
 npm run typecheck                 # app and tooling
-npx playwright install chromium   # once
-npm run test:e2e                  # builds, serves and plays a full payment in headless Chromium
+npx playwright install chromium webkit   # once
+npm run test:e2e                         # desktop Chromium, plus Pixel 5 (portrait, landscape) and iPhone 13 (WebKit) by touch
 ```
 
 GitHub Actions runs all of these on every push and pull request (`.github/workflows/ci.yml`), and
 Dependabot opens weekly dependency updates.
+
+## Mobile checks
+
+CI emulates phones with touch, but not a real device. On an actual phone:
+
+1. **Portrait:** the table, the "Tap coins" hint and the ledger all fit, clear of the notch and home bar.
+2. **Landscape:** rotate. The ledger moves to the side and Send stays on screen.
+3. **Select vs orbit:** tap a coin (it jumps into Inputs and the camera stays put), drag to orbit
+   (nothing gets picked), pinch to zoom. The coin buttons in the ledger do the same as tapping.
+4. **Pay:** pay a bill, switch to What people think, pay again, switch back for the reveal.
+5. **Audio:** silent until your first tap; the speaker button mutes and unmutes.
+6. **Background:** with sound on, switch apps or lock the screen, then come back. Sound pauses while
+   the page is hidden, on purpose; on an iPhone it may resume on your next tap.
+7. **Safari:** repeat 1–6 in Safari on an iPhone, since CI's WebKit is only a stand-in.
+
+Frame rate, VoiceOver/TalkBack and real audio output can only be judged on the device.
 
 ## Deploying
 
