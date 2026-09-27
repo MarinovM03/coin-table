@@ -28,6 +28,7 @@ export class Hud {
   private toastsEl = $('toasts');
   private camBadgeEl = $('cam-badge');
   private camTimer = 0;
+  private announceTimer = 0;
   private howWasOpen = false;
 
   constructor(actions: HudActions) {
@@ -107,6 +108,13 @@ export class Hud {
       window.setTimeout(() => el.remove(), 500);
     }, ms);
     while (this.toastsEl.children.length > 3) this.toastsEl.firstElementChild?.remove();
+  }
+
+  announce(text: string, delay = 0) {
+    window.clearTimeout(this.announceTimer);
+    this.announceTimer = window.setTimeout(() => {
+      $('announcer').textContent = text;
+    }, delay);
   }
 
   camBadge(name: string | null) {

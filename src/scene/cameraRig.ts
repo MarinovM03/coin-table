@@ -27,6 +27,7 @@ export const SHOTS: Shot[] = [
 
 /** Seconds per tour shot. */
 const TOUR_HOLD = 7;
+const ROTATE_SPEED = 0.6;
 
 interface Flight {
   fromTarget: THREE.Vector3;
@@ -68,7 +69,7 @@ export class CameraRig {
     c.maxDistance = 22;
     c.maxPolarAngle = Math.PI * 0.47;
     c.minPolarAngle = 0.02;
-    c.rotateSpeed = 0.6;
+    c.rotateSpeed = ROTATE_SPEED;
     c.zoomSpeed = 0.8;
     c.panSpeed = 0.8;
     c.screenSpacePanning = false;
@@ -102,6 +103,11 @@ export class CameraRig {
 
   clearKeys() {
     this.keys.clear();
+  }
+
+  /** While a touch could still be a tap, the camera stays put, so tapping a coin never swings the view. */
+  holdStill(hold: boolean) {
+    this.controls.rotateSpeed = hold ? 0 : ROTATE_SPEED;
   }
 
   private lastScale = 1;

@@ -4,47 +4,68 @@ import { store } from '../model/store';
 import type { CoinView } from '../scene/coin';
 import type { View } from './view';
 
+const slop = (touch: boolean) => (touch ? 14 : 6);
+
 export class Pointer {
   hovered: CoinView | null = null;
   private raycaster = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
   private pointerIn = false;
-  private down: { x: number; y: number; t: number } | null = null;
+  private pressed = new Set<number>();
+  private down: { id: number; x: number; y: number; t: number; touch: boolean } | null = null;
 
   constructor(
     private view: View,
     onTap: (id: string) => void,
   ) {
     const dom = view.stage.renderer.domElement;
+    const { rig } = view;
     dom.addEventListener('pointermove', (e) => {
       this.pointerIn = true;
-      if (this.down && this.hovered && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) > 6) this.clearHover();
+      const d = this.down;
+      if (d && d.id === e.pointerId) {
+        const moved = Math.hypot(e.clientX - d.x, e.clientY - d.y);
+        if (moved > 6 && this.hovered) this.clearHover();
+        if (d.touch && moved > slop(true)) rig.holdStill(false);
+      }
       this.aim(e);
     });
     dom.addEventListener('pointerleave', () => {
       this.pointerIn = false;
       this.clearHover();
     });
-    dom.addEventListener('pointercancel', () => {
+    dom.addEventListener('pointercancel', (e) => {
+      this.pressed.delete(e.pointerId);
       this.down = null;
+      rig.holdStill(false);
       this.clearHover();
     });
     dom.addEventListener('pointerdown', (e) => {
-      this.down = { x: e.clientX, y: e.clientY, t: performance.now() };
+      if (e.isPrimary) this.pressed.clear();
+      this.pressed.add(e.pointerId);
+      // A second finger means pinch or pan, never a tap.
+      if (this.pressed.size > 1) {
+        this.down = null;
+        rig.holdStill(false);
+        return;
+      }
+      const touch = e.pointerType !== 'mouse';
+      this.down = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), touch };
+      if (touch) rig.holdStill(true);
       this.aim(e);
     });
     dom.addEventListener('pointerup', (e) => {
+      this.pressed.delete(e.pointerId);
       const d = this.down;
+      if (!d || d.id !== e.pointerId) return;
       this.down = null;
-      if (!d || e.button !== 0) return;
-      // Fingers wobble more than mice: be forgiving about what counts as a tap.
-      const touch = e.pointerType !== 'mouse';
-      const slop = touch ? 14 : 6;
-      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > slop || performance.now() - d.t > (touch ? 750 : 600)) return;
+      rig.holdStill(false);
+      if (e.button !== 0) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > slop(d.touch) || performance.now() - d.t > (d.touch ? 750 : 600)) return;
       this.aim(e);
-      const hit = this.pick() ?? (touch ? this.pickNearest(e.clientX, e.clientY, 26) : null);
+      const hit = this.pick() ?? (d.touch ? this.pickNearest(e.clientX, e.clientY, 34) : null);
       if (hit && view.coins.wallet.get(hit.utxo.id) === hit) onTap(hit.utxo.id);
-      if (touch) this.clearHover();
+      if (d.touch) this.clearHover();
     });
   }
 
@@ -78,7 +99,7 @@ export class Pointer {
       const x = (p.x * 0.5 + 0.5) * window.innerWidth;
       const y = (-p.y * 0.5 + 0.5) * window.innerHeight;
       const mine = coins.wallet.get(show.utxo.id) === show;
-      hud.tooltip.show(show.utxo, x, y, s, s.selected.includes(show.utxo.id), mine);
+      hud.tooltip.show(show.utxo, x, y, s, s.selected.includes(show.utxo.id), mine, !this.hovered);
     } else {
       hud.tooltip.hide();
     }
