@@ -4,12 +4,13 @@ class Sfx {
   private master: GainNode | null = null;
   private noiseBuf: AudioBuffer | null = null;
   private muted = false;
+  private hidden = false;
   private lastClink = 0;
 
   /** Must be called from a user gesture (browsers block autoplay). */
   unlock() {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      if (this.ctx.state !== 'running' && !this.hidden) this.ctx.resume().catch(() => {});
       return;
     }
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -26,6 +27,13 @@ class Sfx {
     this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  }
+
+  /** Silent while the page is in the background; iOS may need the next tap to resume. */
+  setHidden(hidden: boolean) {
+    this.hidden = hidden;
+    if (!this.ctx) return;
+    (hidden ? this.ctx.suspend() : this.ctx.resume()).catch(() => {});
   }
 
   setMuted(m: boolean) {
