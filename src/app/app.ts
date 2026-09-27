@@ -60,7 +60,7 @@ export class App {
       toggleSound: () => this.controller.toggleMute(),
       toggleHide: () => this.controller.toggleHide(),
       nextCamera: () => this.rig.nextShot(),
-      removeInput: (id) => this.controller.toggle(id),
+      toggleInput: (id) => this.controller.toggle(id),
       highlightTerm: (t) => this.controller.highlightTerm(t),
     });
     const view: View = { stage: this.stage, rig: this.rig, world: this.world, fx: this.fx, bar: this.bar, coins: this.coins, hud: this.hud };
@@ -150,6 +150,9 @@ export class App {
       this.lastInput = this.time;
     };
     window.addEventListener('pointerdown', unlock, { capture: true });
+    // A touch only counts as the gesture that may start audio once the finger lifts.
+    window.addEventListener('pointerup', unlock, { capture: true });
+    window.addEventListener('touchend', unlock, { capture: true, passive: true });
     window.addEventListener(
       'pointermove',
       () => {
@@ -158,6 +161,7 @@ export class App {
       { passive: true },
     );
     window.addEventListener('keydown', unlock, { capture: true });
+    document.addEventListener('visibilitychange', () => sfx.setHidden(document.hidden));
   }
 
   private onState(s: State, prev: State) {

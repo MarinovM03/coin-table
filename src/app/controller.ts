@@ -2,6 +2,8 @@ import { sfx } from '../audio/sfx';
 import { pickCoins } from '../model/bitcoin';
 import { FEE_MAX, FEE_MIN, currentPlan, finishedRound, invoiceOf, store, type Mode, type State } from '../model/store';
 import { walletTotal } from '../model/wallet';
+import { COARSE, refillHint } from '../ui/dom';
+import { describeCoin } from '../ui/tooltip';
 import { plural, sats } from '../util/format';
 import { html, type SafeHtml } from '../util/html';
 import { clamp, tweens } from '../util/tween';
@@ -52,6 +54,8 @@ export class Controller {
     this.pointer.clearHover();
     store.set({ focusId: order[n] });
     sfx.tick(0.9 + n * 0.04);
+    const u = s.utxos.find((c) => c.id === order[n])!;
+    this.view.hud.announce(`Coin ${n + 1} of ${order.length}: ${describeCoin(u, s, s.selected.includes(u.id))}`, 400);
   }
 
   clearSelection() {
@@ -72,7 +76,7 @@ export class Controller {
     const picked = pickCoins(s.utxos, inv.amount, s.feeRate);
     if (!picked) {
       sfx.deny();
-      this.view.hud.toast(html`Your whole wallet can’t cover ${sats(inv.amount)} plus the fee. <kbd>⇧R</kbd> resets it.`, 'warn');
+      this.view.hud.toast(html`Your whole wallet can’t cover ${sats(inv.amount)} plus the fee. ${refillHint()}`, 'warn');
       return;
     }
     store.set({ selected: picked.map((u) => u.id) });
@@ -120,6 +124,7 @@ export class Controller {
     const s = store.get();
     if (s.phase === 'receipt') return this.nextBill();
     if (s.phase !== 'select') return;
+    if (!pickCoins(s.utxos, invoiceOf(s).amount, s.feeRate)) return this.resetWallet();
     if (s.mode === 'myth') void this.payments.payFromBalance();
     else void this.payments.payWithCoins();
   }
@@ -136,7 +141,7 @@ export class Controller {
     if (summary) {
       hud.toast(summary, 'good', 8000);
     } else if (!pickCoins(ns.utxos, inv.amount, ns.feeRate)) {
-      hud.toast(html`Not enough left for ${inv.to}. Hold <kbd>Shift</kbd> + <kbd>R</kbd> to refill the wallet.`, 'warn', 6000);
+      hud.toast(html`Not enough left for ${inv.to}. ${refillHint()}`, 'warn', 6000);
     } else {
       hud.toast(html`New bill: <b>${inv.to}</b> — ${sats(inv.amount)} sats.`, '', 2600);
     }
@@ -202,6 +207,6 @@ export class Controller {
 function roundSummary(s: State): SafeHtml | null {
   const r = finishedRound(s);
   return r
-    ? html`<b>All ${r.bills} bills paid.</b> ${r.coinsIn} whole coins went in, ${r.changeCoins} change ${plural(r.changeCoins, 'coin')} came back, and ${sats(r.fees)} sats went to fees. The bills start over — <kbd>⇧R</kbd> refills the wallet.`
+    ? html`<b>All ${r.bills} bills paid.</b> ${r.coinsIn} whole coins went in, ${r.changeCoins} change ${plural(r.changeCoins, 'coin')} came back, and ${sats(r.fees)} sats went to fees. The bills start over${COARSE ? '.' : html` — <kbd>⇧R</kbd> refills the wallet.`}`
     : null;
 }

@@ -3,7 +3,7 @@ import { FEE_MAX, FEE_MIN, invoiceOf, selectedCoins, type State, type TxRecord }
 import { INVOICES, walletTotal, type Utxo } from '../model/wallet';
 import { btc, compact, plural, sats } from '../util/format';
 import { html, setHtml } from '../util/html';
-import { $ } from './dom';
+import { $, COARSE } from './dom';
 import { Ticker } from './ticker';
 
 export interface LedgerActions {
@@ -11,7 +11,7 @@ export interface LedgerActions {
   pick(): void;
   clear(): void;
   setFee(rate: number): void;
-  removeInput(id: string): void;
+  toggleInput(id: string): void;
 }
 
 export class Ledger {
@@ -42,7 +42,7 @@ export class Ledger {
 
     $('in-chips').addEventListener('click', (e) => {
       const chip = (e.target as HTMLElement).closest<HTMLElement>('[data-id]');
-      if (chip?.dataset.id) actions.removeInput(chip.dataset.id);
+      if (chip?.dataset.id) actions.toggleInput(chip.dataset.id);
     });
   }
 
@@ -73,16 +73,19 @@ export class Ledger {
 
     const send = $<HTMLButtonElement>('btn-send');
     const ready = s.mode === 'myth' ? !!mythPlan : plan.ok;
+    const broke = !done && !mythPlan;
     send.disabled = s.phase === 'sending';
-    send.classList.toggle('is-ready', (s.phase === 'select' && ready) || !!done);
+    send.classList.toggle('is-ready', (s.phase === 'select' && (ready || broke)) || !!done);
     send.classList.toggle('is-next', !!done);
     send.querySelector('.lbl')!.textContent = done
       ? 'Next bill'
-      : ready
-        ? `Send ${compact(inv.amount)}`
-        : s.mode === 'myth' || plan.inputCount
-          ? 'Not enough'
-          : 'Pick coins';
+      : broke
+        ? 'Refill wallet'
+        : ready
+          ? `Send ${compact(inv.amount)}`
+          : s.mode === 'myth' || plan.inputCount
+            ? 'Not enough'
+            : 'Pick coins';
   }
 
   shake() {
@@ -106,16 +109,22 @@ export class Ledger {
 
     const chips = $('in-chips');
     const spent = s.phase === 'receipt';
-    const chipsHtml = html`${coins.map((c) =>
-      spent
-        ? html`<span class="chip is-spent">${sats(c.value)}</span>`
-        : html`<button type="button" class="chip" data-id="${c.id}" title="Remove from inputs">${sats(c.value)}<i>×</i></button>`,
-    )}`;
+    // Coins on a phone screen are smaller than a fingertip, so touch devices also get the wallet as buttons.
+    const choose = COARSE && !spent;
+    const list = choose ? [...s.utxos].sort((a, b) => b.value - a.value) : coins;
+    const chipsHtml = html`${list.map((c) => {
+      if (spent) return html`<span class="chip is-spent">${sats(c.value)}</span>`;
+      if (!choose)
+        return html`<button type="button" class="chip" data-id="${c.id}" title="Remove from inputs" aria-label="Remove ${sats(c.value)} from inputs">${sats(c.value)}<i aria-hidden="true">×</i></button>`;
+      const on = s.selected.includes(c.id);
+      return html`<button type="button" class="chip${on ? ' is-in' : ''}" data-id="${c.id}" aria-pressed="${on ? 'true' : 'false'}">${sats(c.value)}</button>`;
+    })}`;
     if (chipsHtml.value !== this.lastChips) {
       this.lastChips = chipsHtml.value;
       setHtml(chips, chipsHtml);
     }
-    chips.classList.toggle('empty', coins.length === 0);
+    chips.classList.toggle('empty', list.length === 0);
+    chips.classList.toggle('is-chooser', choose);
 
     const note = $('change-note');
     const rowChange = this.el.querySelector('.row-change')!;
