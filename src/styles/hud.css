@@ -1,6 +1,6 @@
 .hud {
   position: fixed;
-  inset: 0;
+  inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   pointer-events: none;
   z-index: 2;
   transition: opacity 0.5s var(--ease);

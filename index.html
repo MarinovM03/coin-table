@@ -45,8 +45,8 @@
       </nav>
 
       <div class="utils">
-        <button type="button" class="util" id="btn-how" title="How it works (H)"><kbd>H</kbd><span>How it works</span></button>
-        <button type="button" class="util" id="btn-cam" title="Cinematic cameras (C)"><kbd>C</kbd><span>Camera</span></button>
+        <button type="button" class="util" id="btn-how" title="How it works (H)" aria-label="How it works"><kbd>H</kbd><span class="util-label">How it works</span><svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M7.75 8a2.25 2.25 0 1 1 3.1 2.08c-.55.23-.85.66-.85 1.22v.45M10 14.2v.05" /></svg></button>
+        <button type="button" class="util" id="btn-cam" title="Cinematic cameras (C)" aria-label="Cinematic cameras"><kbd>C</kbd><span class="util-label">Camera</span><svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="6" width="10" height="8.5" rx="2" /><path d="M12.5 9.2 17 6.8v7.4l-4.5-2.4z" /></svg></button>
         <button type="button" class="util icon" id="btn-sound" title="Sound (M)" aria-label="Toggle sound"><span class="snd"></span></button>
         <button type="button" class="util icon" id="btn-hide" title="Hide UI (/)" aria-label="Hide UI"><kbd>/</kbd></button>
       </div>
@@ -153,7 +153,7 @@
           <div class="term" data-term="vb"><b>sat/vB</b><span>Fees are priced by size. More inputs → bigger transaction → bigger fee.</span></div>
         </div>
         <p class="fine">
-          Sizes assume native SegWit (P2WPKH): ≈68 vB per input, 31 vB per output, ≈11 vB overhead. Outputs under
+          Sizes assume native SegWit (P2WPKH): ≈68 vB per input, 31 vB per output, about 10.5 vB overhead. Outputs under
           294 sats are “dust” that nodes won’t relay by default, so when a change coin would end up that small
           (after paying for its own output), wallets skip it and the leftover goes to the fee. Coins, txids and the
           time-lapse block are demo data.

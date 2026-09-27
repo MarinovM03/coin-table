@@ -2,7 +2,7 @@
   position: absolute;
   top: var(--pad);
   left: var(--pad);
-  width: min(390px, calc(100vw - 2 * var(--pad)));
+  width: min(390px, calc(100% - 2 * var(--pad)));
   pointer-events: none;
 }
 
@@ -113,9 +113,9 @@ body[data-mode='myth'] .tagline {
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
   .title {
-    width: calc(100vw - 2 * var(--pad) - 90px);
+    width: calc(100% - 2 * var(--pad) - 56px);
   }
 
   .wordmark {
@@ -132,5 +132,25 @@ body[data-mode='myth'] .tagline {
   .stats,
   .lede {
     display: none;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .title {
+    width: auto;
+  }
+
+  .wordmark {
+    font-size: 21px;
+  }
+
+  .tagline {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .tagline {
+    font-size: 14.5px;
   }
 }

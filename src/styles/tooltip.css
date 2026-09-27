@@ -1,5 +1,5 @@
 .tip {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 270px;
@@ -105,7 +105,7 @@
   border: 1px solid rgba(255, 180, 77, 0.45);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
   .tip {
     width: 230px;
   }

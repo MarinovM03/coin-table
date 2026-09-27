@@ -3,7 +3,7 @@
   left: calc(50% - var(--scene-shift));
   bottom: calc(var(--pad) + 6px);
   transform: translateX(-50%);
-  width: min(640px, calc(100vw - 2 * var(--pad)));
+  width: min(640px, calc(100% - 2 * var(--pad)));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -123,9 +123,9 @@ body[data-mode='myth'] .coach span {
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
   .subtitle {
-    bottom: calc(46vh + 64px);
+    bottom: calc(46vh + 12px);
   }
 
   .narrator {
@@ -134,5 +134,17 @@ body[data-mode='myth'] .coach span {
 
   .coach {
     display: none;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .subtitle {
+    bottom: calc(var(--pad) + 50px);
+    width: calc(100% - var(--side) - 3 * var(--pad));
+  }
+
+  .narrator {
+    font-size: 12.5px;
+    line-height: 1.4;
   }
 }

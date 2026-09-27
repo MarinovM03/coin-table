@@ -75,14 +75,26 @@ body[data-mode='myth'] .btn.primary.is-ready {
   cursor: default;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
   .btn.primary {
     grid-column: auto;
     height: 42px;
+    padding: 0 10px;
+    justify-content: center;
   }
 
   .btn.ghost {
     height: 42px;
+  }
+
+  .btn kbd {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .btn {
+    min-height: 44px;
   }
 
   .btn kbd {

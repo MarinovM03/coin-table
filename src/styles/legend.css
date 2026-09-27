@@ -33,7 +33,13 @@
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
+  .legend {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
   .legend {
     display: none;
   }

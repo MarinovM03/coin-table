@@ -115,6 +115,17 @@ body[data-mode='myth'] .seg-thumb {
   gap: 6px;
 }
 
+.util .ico {
+  display: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .util {
   display: inline-flex;
   align-items: center;
@@ -192,7 +203,7 @@ body[data-mode='myth'] .seg-thumb {
   opacity: 0.6;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
   .utils {
     flex-direction: column;
   }
@@ -201,8 +212,13 @@ body[data-mode='myth'] .seg-thumb {
     display: none;
   }
 
-  .util span {
+  .util-label,
+  .util kbd {
     display: none;
+  }
+
+  .util .ico {
+    display: block;
   }
 
   .util {
@@ -212,8 +228,10 @@ body[data-mode='myth'] .seg-thumb {
   }
 
   .modes {
-    top: auto;
-    bottom: calc(46vh + 10px);
+    top: calc(var(--pad) + 62px);
+    left: var(--pad);
+    transform: none;
+    align-items: flex-start;
   }
 
   .modes-label {
@@ -227,5 +245,45 @@ body[data-mode='myth'] .seg-thumb {
 
   .seg button kbd {
     display: none;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .utils {
+    flex-direction: row;
+    right: calc(var(--side) + var(--pad) * 2);
+  }
+
+  .modes {
+    top: auto;
+    bottom: var(--pad);
+    left: calc(50% - var(--scene-shift));
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 360px) {
+  .seg button {
+    padding: 7px 9px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 340px) {
+  .modes {
+    top: calc(var(--pad) + 80px);
+  }
+}
+
+@media (pointer: coarse) {
+  #btn-hide,
+  .util kbd,
+  .seg button kbd {
+    display: none;
+  }
+
+  .util {
+    min-width: 44px;
+    height: 44px;
   }
 }

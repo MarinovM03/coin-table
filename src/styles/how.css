@@ -3,7 +3,7 @@
   top: var(--pad);
   left: var(--pad);
   bottom: var(--pad);
-  width: min(400px, calc(100vw - 2 * var(--pad)));
+  width: min(400px, calc(100% - 2 * var(--pad)));
   padding: 20px 20px 16px;
   overflow: auto;
   background: rgba(11, 13, 18, 0.9);
@@ -166,4 +166,25 @@ body[data-term='vb'] .row-fee {
   background: rgba(255, 255, 255, 0.06);
   box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.06);
   border-radius: 6px;
+}
+
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
+  .how {
+    top: auto;
+    left: var(--pad);
+    right: var(--pad);
+    width: auto;
+    max-height: 62%;
+    transform: translateY(calc(100% + 40px));
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .how {
+    top: var(--pad);
+    left: auto;
+    width: min(360px, 45%);
+    max-height: none;
+    transform: translateX(calc(100% + 40px));
+  }
 }

@@ -74,8 +74,8 @@ body.no-webgl .unhide {
 
 .unhide {
   position: fixed;
-  right: var(--pad);
-  bottom: var(--pad);
+  right: calc(var(--pad) + env(safe-area-inset-right, 0px));
+  bottom: calc(var(--pad) + env(safe-area-inset-bottom, 0px));
   z-index: 3;
   display: flex;
   align-items: center;

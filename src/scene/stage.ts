@@ -7,6 +7,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
+const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 const LITE_RATIO = 0.5;
 
 /** Vignette, film grain and slight chromatic fringing toward the edges. */
@@ -77,9 +78,9 @@ export class Stage {
   readonly key: THREE.SpotLight;
   /** Lens for the current viewport; the camera rig scales it per shot. */
   baseFov = 32;
-  /** Render scale: past 1.5 the HDR + bloom chain costs far more than it shows. */
-  private maxRatio = Math.min(window.devicePixelRatio, 1.5);
-  private ratio = this.maxRatio;
+  /** Render scale: past 1.5 the HDR + bloom chain costs far more than it shows. Phone GPUs start at 1 and climb only while frames stay smooth. */
+  private maxRatio = Math.min(window.devicePixelRatio, TOUCH ? 1.25 : 1.5);
+  private ratio = Math.min(this.maxRatio, TOUCH ? 1 : 1.5);
   private avgDt = 1 / 60;
   private slowFor = 0;
   private fastFor = 0;
@@ -104,9 +105,10 @@ export class Stage {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.domElement.id = 'gl';
     this.renderer.domElement.setAttribute('role', 'img');
+    this.renderer.domElement.tabIndex = 0;
     this.renderer.domElement.setAttribute(
       'aria-label',
-      'A table with your wallet’s coins. Use the arrow keys and Enter to pick coins, and Space to pay; the panel on the right shows the numbers.',
+      'A table with your wallet’s coins. Arrow keys and Enter pick coins, Space pays, and the ledger lists every number.',
     );
     host.appendChild(this.renderer.domElement);
 
@@ -191,9 +193,8 @@ export class Stage {
     // Narrow screens: widen the lens so the whole table stays in frame.
     this.baseFov = w / h < 0.8 ? 52 : w / h < 1.2 ? 40 : 32;
     this.camera.fov = this.baseFov;
-    // Frame the table in the space the HUD leaves free: nudge left of the
-    // ledger on desktop, up above the bottom sheet on phones.
-    if (w > 860) this.camera.setViewOffset(w, h, Math.min(150, w * 0.1), -h * 0.015, w, h);
+    if (h <= 500 && w > h) this.camera.setViewOffset(w, h, Math.min(300, w * 0.4) / 2 + 6, 0, w, h);
+    else if (w > 860) this.camera.setViewOffset(w, h, Math.min(150, w * 0.1), -h * 0.015, w, h);
     else this.camera.setViewOffset(w, h, 0, h * 0.2, w, h);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);

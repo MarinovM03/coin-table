@@ -106,6 +106,10 @@ kbd {
   touch-action: none;
 }
 
+#gl:focus-visible {
+  outline-offset: -3px;
+}
+
 #labels {
   position: absolute;
   inset: 0;
@@ -113,10 +117,24 @@ kbd {
   overflow: hidden;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
   :root {
     --pad: 14px;
     --scene-shift: 0px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --pad: 12px;
+    --side: min(300px, 40vw);
+    --scene-shift: calc((var(--side) + var(--pad)) / 2);
+  }
+}
+
+@media (pointer: coarse) {
+  html {
+    touch-action: manipulation;
   }
 }
 

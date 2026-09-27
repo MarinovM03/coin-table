@@ -455,7 +455,7 @@
   transform: translateY(-8px) scale(1.18);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
   .world-tag--miner {
     display: none;
   }

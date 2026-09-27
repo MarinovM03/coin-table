@@ -291,6 +291,27 @@ body[data-mode='reality'] .myth-only {
   }
 }
 
+.chips.is-chooser {
+  flex: none;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chips.is-chooser .chip {
+  flex: none;
+  animation: none;
+  border-color: var(--line-2);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.chips.is-chooser .chip.is-in {
+  border-color: rgba(242, 192, 102, 0.6);
+  background: rgba(242, 192, 102, 0.2);
+  color: var(--gold-2);
+}
+
 .split {
   display: flex;
   height: 8px;
@@ -529,7 +550,7 @@ body[data-mode='myth'] .actions {
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 860px), (orientation: landscape) and (max-height: 500px) {
   .inv-memo,
   .fee-scale,
   .chips.empty,
@@ -547,6 +568,13 @@ body[data-mode='myth'] .actions {
 
   .ledger-body {
     gap: 4px;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  body[data-phase='receipt'] .ledger > :not(.actions) {
+    display: none;
   }
 
   .chips {
@@ -570,6 +598,7 @@ body[data-mode='myth'] .actions {
     max-height: 46vh;
     padding: 12px;
     gap: 10px;
+    overflow: hidden;
   }
 
   .invoice {
@@ -582,6 +611,21 @@ body[data-mode='myth'] .actions {
 
   .fee-scale kbd {
     display: none;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .ledger {
+    top: var(--pad);
+    right: var(--pad);
+    bottom: var(--pad);
+    left: auto;
+    width: var(--side);
+    max-height: none;
+  }
+
+  body[data-phase='receipt'] .ledger {
+    top: auto;
   }
 }
 
@@ -606,7 +650,9 @@ body[data-mode='myth'] .actions {
   }
 
   .chip {
-    height: 30px;
-    padding: 0 9px 0 11px;
+    height: 40px;
+    min-width: 44px;
+    justify-content: center;
+    padding: 0 12px;
   }
 }
