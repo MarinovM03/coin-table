@@ -54,3 +54,14 @@ test('ships with a strict Content-Security-Policy that the page never violates',
   await expect(page.locator('.coin-chip')).toHaveCount(9);
   expect(violations).toEqual([]);
 });
+
+test('tells screen readers which coin the arrow keys are on', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.coin-chip')).toHaveCount(9);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#announcer')).toHaveText(/^Coin 1 of 9: 48,000 sats\. Paid for a freelance logo\..*Enter uses it\.$/);
+  await expect(page.locator('#gl')).toHaveAttribute('aria-describedby', 'tip');
+  await expect(page.locator('#tip')).toContainText('Press Enter to use it');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#gl')).not.toHaveAttribute('aria-describedby', 'tip');
+});
